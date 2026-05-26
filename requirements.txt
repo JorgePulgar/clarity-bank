@@ -1,0 +1,32 @@
+# --- API ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+python-multipart>=0.0.9   # uploads de fichero en /transactions/import
+
+# --- Dashboard demo ---
+streamlit>=1.33
+requests>=2.31
+pandas>=2.2
+
+# --- Anonimizacion ---
+# OJO: presidio + spacy pueden no tener wheel para Python 3.14.
+# El codigo degrada a regex puro si no estan instalados (ver core/anonymization.py).
+presidio-analyzer>=2.2
+presidio-anonymizer>=2.2
+# modelo spacy es para presidio. Instalar aparte:
+#   python -m spacy download es_core_news_md
+
+# --- LLM (insights) ---
+openai>=1.30            # cliente Azure OpenAI
+
+# --- ML (lo aporta mi companera; aqui solo para cargar el .pkl) ---
+# sentence-transformers>=2.7
+# scikit-learn>=1.4
+# joblib>=1.4
+
+# --- Tests ---
+pytest>=8.1
+httpx>=0.27             # TestClient de FastAPI

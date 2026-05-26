@@ -1,0 +1,16 @@
+{
+  "_comentario": "Plantilla. La rellena mi companera al entregar el modelo real.",
+  "model_name": "pendiente",
+  "version": "0.0.0",
+  "embeddings": "paraphrase-multilingual-MiniLM-L12-v2",
+  "categorias": [
+    "alimentacion", "restauracion", "transporte", "ocio", "compras", "hogar",
+    "salud", "suscripciones", "transferencias", "ingresos", "impuestos_tasas", "otros"
+  ],
+  "umbral_confianza_nivel2": 0.5,
+  "metricas": {
+    "accuracy": null,
+    "f1_macro": null,
+    "fecha_entrenamiento": null
+  }
+}

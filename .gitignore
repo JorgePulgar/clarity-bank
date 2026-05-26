@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secretos
+.env
+
+# Base de datos local
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Artefactos ML grandes (los aporta mi companera; no versionar binarios)
+models/*.pkl
+models/*.joblib
+models/*.bin
+
+# Datos generados
+data/*.csv
+data/*.json
+!.gitkeep
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Herramientas y memoria local de Claude Code (no versionar)
+.claude/
+CLAUDE.md
+MEMORIA.md
