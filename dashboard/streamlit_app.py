@@ -9,8 +9,6 @@ Arrancar (con la API ya levantada):
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 import csv
 import io
 import os
@@ -50,7 +48,7 @@ with st.sidebar:
     try:
         h = requests.get(f"{API_URL}/health", timeout=2).json()
         api_ok = True
-        modo = h.get("classifier_mode", "mock")
+        modo = h.get("classifier", "mock")
         st.success(f"API conectada — clasificador: {modo}")
     except Exception:
         st.error("API no disponible")

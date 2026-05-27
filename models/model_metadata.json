@@ -1,16 +1,37 @@
 {
-  "_comentario": "Plantilla. La rellena mi companera al entregar el modelo real.",
-  "model_name": "pendiente",
-  "version": "0.0.0",
-  "embeddings": "paraphrase-multilingual-MiniLM-L12-v2",
-  "categorias": [
-    "alimentacion", "restauracion", "transporte", "ocio", "compras", "hogar",
-    "salud", "suscripciones", "transferencias", "ingresos", "impuestos_tasas", "otros"
+  "model_name": "LightGBM",
+  "embedder": "paraphrase-multilingual-MiniLM-L12-v2",
+  "embedding_dim": 384,
+  "trained_on": "2026-05-27T08:51:28.228292",
+  "categories": [
+    "alimentacion",
+    "compras",
+    "hogar",
+    "impuestos_tasas",
+    "ingresos",
+    "ocio",
+    "otros",
+    "restauracion",
+    "salud",
+    "suscripciones",
+    "transporte",
+    "transferencias"
   ],
-  "umbral_confianza_nivel2": 0.5,
-  "metricas": {
-    "accuracy": null,
-    "f1_macro": null,
-    "fecha_entrenamiento": null
+  "confidence_threshold": 0.8999999999999999,
+  "metrics": {
+    "accuracy_val": 0.9476635514018692,
+    "accuracy_test_l1": 0.9121495327102803,
+    "accuracy_test_l1_l2": 0.9607476635514018,
+    "f1_macro_test": 0.9126667070964231,
+    "pct_llm_fallback": 10.841121495327103
+  },
+  "n_train": 4276,
+  "n_val": 535,
+  "n_test": 535,
+  "latency_ms": {
+    "mean": 55.547,
+    "p50": 40.891,
+    "p95": 105.921,
+    "p99": 136.121
   }
 }

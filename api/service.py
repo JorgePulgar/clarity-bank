@@ -42,13 +42,13 @@ def process_transaction(
     desc_anon, entities = anonymize(description)
     if entities:
         logger.info("anonimizacion user=%s entidades=%s", user_id, entities)
-    clf = classify(desc_anon, amount)
+    clf = classify(desc_anon.upper(), amount)
     category = clf["categoria"]
 
     history = queries.get_category_history(user_id, category)
     is_anomaly, reason = detect_zscore_anomaly(amount, category, history)
 
-    if not is_anomaly:
+    if not is_anomaly and category == "suscripciones":
         merchant_history = queries.get_merchant_history(user_id, desc_anon)
         is_anomaly, reason = detect_subscription_change(desc_anon, amount, merchant_history)
 

@@ -22,10 +22,11 @@ presidio-anonymizer>=2.2
 # --- LLM (insights) ---
 openai>=1.30            # cliente Azure OpenAI
 
-# --- ML (lo aporta mi companera; aqui solo para cargar el .pkl) ---
-# sentence-transformers>=2.7
-# scikit-learn>=1.4
-# joblib>=1.4
+# --- ML (clasificador real de mi companera) ---
+sentence-transformers>=2.7
+scikit-learn>=1.4
+joblib>=1.4
+lightgbm>=4.0
 
 # --- Tests ---
 pytest>=8.1

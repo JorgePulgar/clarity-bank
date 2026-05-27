@@ -33,14 +33,15 @@ _REGEX_RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"), "<EMAIL>"),
     # Telefono espanol: +34 opcional + 9 digitos empezando 6/7/8/9
     (re.compile(r"\b(?:\+34[\s-]?)?[6789]\d{2}[\s-]?\d{3}[\s-]?\d{3}\b"), "<TELEFONO>"),
-    # Nombres de persona tras marcadores de banca (grupo 1 = marcador, se conserva)
+    # Nombres de persona tras marcadores de banca (DE/A opcional, mayusculas/minusculas)
+    # TRA(?:N)?SFERENCIA cubre tanto TRANSFERENCIA como TRASFERENCIA (typo comun)
     (
         re.compile(
-            r"((?:BIZUM|TRANSFERENCIA)\s+(?:DE|A))\s+"
-            r"[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?:\s+[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+){0,3}",
-            re.UNICODE,
+            r"((?:BIZUM|TRA(?:N)?SFERENCIA)\s+(?:(?:DE|A)\s+)?)"
+            r"[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜa-záéíóúñü]+(?:\s+[A-ZÁÉÍÓÚÑÜa-záéíóúñü]+){1,3}",
+            re.UNICODE | re.IGNORECASE,
         ),
-        r"\1 <PERSONA>",
+        r"\1<PERSONA>",
     ),
     # Cuenta parcialmente enmascarada: *****1234
     (re.compile(r"\*{2,}\d{4,}"), "<CUENTA>"),
@@ -100,13 +101,46 @@ def _init_presidio() -> bool:
     return _presidio_ready
 
 
+# Solo PII real. Excluye ORGANIZATION/LOCATION/GPE: son nombres de comercio,
+# no datos personales, y son la señal clave para el clasificador.
+_PII_ENTITIES = [
+    "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "IBAN_CODE",
+    "CREDIT_CARD", "CRYPTO", "URL", "IP_ADDRESS",
+]
+
+# Palabras clave bancarias que NO deben convertirse a title case antes del NER
+# (evita que spacy las confunda con nombres propios).
+_BANKING_KEYWORDS = frozenset({
+    "TRANSFERENCIA", "TRASFERENCIA", "BIZUM", "PAGO", "CARGO", "RECIBO",
+    "NOMINA", "ABONO", "INGRESO", "REINTEGRO", "COMPRA", "COBRO",
+    "TARJETA", "CUOTA", "FACTURA", "MOVIMIENTO", "CONCEPTO", "TRASPASO",
+    "DE", "A", "AL", "DEL", "EN", "POR", "CON", "SL", "SA", "SLU",
+})
+
+
+def _to_ner_case(text: str) -> str:
+    """Title case para NER manteniendo palabras clave bancarias en mayusculas."""
+    return " ".join(
+        w if w.upper() in _BANKING_KEYWORDS else w.capitalize()
+        for w in text.split()
+    )
+
+
 def _presidio_anonymize(text: str) -> tuple[str, dict[str, int]]:
-    """Aplica Presidio NER y devuelve (texto, conteo de entidades detectadas)."""
-    results = _analyzer.analyze(text=text, language="es")  # type: ignore[union-attr]
+    """Aplica Presidio NER (solo PII) y devuelve (texto, conteo de entidades detectadas).
+
+    Convierte a title case para el analisis NER: spacy detecta mejor nombres propios
+    en texto mixto que en MAYUSCULAS. Las posiciones de span se conservan (title()
+    no cambia la longitud), por lo que la anonimizacion se aplica sobre el texto original.
+    """
+    text_for_ner = _to_ner_case(text)
+    results = _analyzer.analyze(text=text_for_ner, language="es", entities=_PII_ENTITIES)  # type: ignore[union-attr]
     entities: dict[str, int] = {}
     for r in results:
         entities[r.entity_type] = entities.get(r.entity_type, 0) + 1
-    out = _anonymizer.anonymize(text=text, analyzer_results=results)  # type: ignore[union-attr]
+    from presidio_anonymizer.entities import OperatorConfig
+    operators = {"PERSON": OperatorConfig("replace", {"new_value": "<PERSONA>"})}
+    out = _anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)  # type: ignore[union-attr]
     return out.text, entities
 
 
