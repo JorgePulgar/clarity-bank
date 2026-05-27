@@ -35,7 +35,7 @@ def process_transaction(
     """
     queries.ensure_user(user_id)
 
-    desc_anon = anonymize(description)
+    desc_anon, _entities = anonymize(description)
     clf = classify(desc_anon, amount)
     category = clf["categoria"]
 
