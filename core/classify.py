@@ -12,6 +12,7 @@ Para forzar el mock en demos, llamar a use_mock().
 """
 from __future__ import annotations
 
+import os
 from typing import Callable, Optional
 
 # Categorias validas (espejo de schemas.Categoria; aqui sin dependencia para evitar ciclo).
@@ -79,8 +80,12 @@ def _load_real() -> Optional[Callable[[str, float], dict]]:
         return None
 
 
+# USE_MOCK_CLASSIFIER=1|true|yes fuerza el mock aunque exista el modelo real.
+# Util para demos y tests sin necesidad de llamar a use_mock() explicitamente.
+_FORCE_MOCK = os.getenv("USE_MOCK_CLASSIFIER", "").lower() in ("1", "true", "yes")
+
 # Se resuelve una vez al importar. _classifier=None -> usar mock.
-_classifier: Optional[Callable[[str, float], dict]] = _load_real()
+_classifier: Optional[Callable[[str, float], dict]] = None if _FORCE_MOCK else _load_real()
 
 
 def use_mock() -> None:
