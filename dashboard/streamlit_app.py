@@ -28,8 +28,16 @@ from scripts.generate_history import generate as _gen_historico  # noqa: E402
 
 API_URL = os.environ.get("CLARITY_API_URL", "http://127.0.0.1:8000")
 
-st.set_page_config(page_title="ClarityBank Demo", page_icon="*", layout="wide")
-st.title("ClarityBank - Demo")
+st.set_page_config(
+    page_title="ClarityBank — Categorizacion de transacciones",
+    page_icon=":bank:",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+st.title("ClarityBank — Categorizacion inteligente de transacciones")
+st.caption(
+    "Prototipo TFM · Pipeline: anonimizacion RGPD → clasificacion → deteccion de anomalias → insights LLM"
+)
 
 # Sidebar global: conexion, usuario activo, metricas en vivo, reset
 with st.sidebar:
@@ -84,7 +92,11 @@ with st.sidebar:
         st.session_state["user_id"] = uid
         st.rerun()
 
-tab1, tab2, tab3 = st.tabs(["Transaccion individual", "Importar lote", "Insights"])
+tab1, tab2, tab3 = st.tabs([
+    "Transaccion individual",
+    "Importar historico",
+    "Insights mensuales",
+])
 
 
 # --- Pantalla 1: transaccion individual -----------------------------------
