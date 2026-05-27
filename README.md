@@ -1,110 +1,367 @@
-# ClarityBank (prototipo TFM)
+# ClarityBank — Prototipo TFM
 
-Sistema de categorizacion de transacciones bancarias, deteccion de anomalias e
-insights mensuales. Fintech agregadora simulada. Prototipo, no produccion.
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.45-FF4B4B?logo=streamlit)
+![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite)
+![Azure OpenAI](https://img.shields.io/badge/Azure_OpenAI-gpt--4o--mini-0089D6?logo=microsoftazure)
+![License](https://img.shields.io/badge/licencia-TFM--solo-lightgrey)
 
-Arquitectura de dos niveles: clasificador local (gratis) + LLM solo para casos
-dificiles. Todo lo que sale al LLM se anonimiza antes (RGPD).
+> **Estado**: prototipo funcional · Python 3.11–3.14 · no produccion
 
-## Estructura
+---
+
+## Descripcion
+
+ClarityBank es el backend de un sistema de inteligencia financiera personal para una fintech
+agregadora simulada (340 000 usuarios, 2,1 M transacciones/mes).
+
+El sistema cubre tres funcionalidades:
+
+1. **Categorizacion automatica** — texto crudo del movimiento → una de 12 categorias.
+2. **Deteccion de anomalias** — compara cada transaccion contra el historico del usuario
+   (z-score por categoria + deteccion de salto en suscripciones).
+3. **Insights mensuales en lenguaje natural** — resumen narrativo del mes generado por
+   Azure OpenAI gpt-4o-mini o por plantilla local si no hay credenciales.
+
+**Reparto del TFM**: mi companera entrega el modelo ML de clasificacion
+(`models/load_classifier.py`). Yo llevo la infraestructura: API REST, base de datos,
+anonimizacion RGPD, deteccion de anomalias, insights y dashboard.
+
+---
+
+## Arquitectura
 
 ```
-clarity-bank/
-├── api/                 # FastAPI
-│   ├── main.py          # app + /health + arranque (crea tablas)
-│   ├── config.py        # settings desde .env
-│   ├── service.py       # pipeline: anonimizar -> clasificar -> anomalia -> guardar
-│   ├── routers/         # transactions, insights, users
-│   ├── models/          # schemas pydantic (contrato HTTP)
-│   └── db/              # SQLite: conexion (database.py) + CRUD (queries.py)
-├── core/
-│   ├── anonymization.py # regex (siempre) + Presidio (opcional)
-│   ├── classify.py      # mock por palabras clave; usa el modelo real si existe
-│   ├── anomalies.py     # z-score + salto sobre maximo historico
-│   └── insights.py      # agregacion + prompt; LLM o plantilla
-├── models/              # artefactos del clasificador (los aporta ML)
-│   ├── load_classifier.py  # contrato load()/classify (hoy: NotImplementedError -> mock)
-│   └── model_metadata.json
-├── dashboard/
-│   └── streamlit_app.py # 3 pantallas: transaccion, importar, insights
-├── scripts/
-│   ├── generate_history.py # historico simulado -> CSV en data/
-│   └── e2e_demo.py         # simulacion completa en proceso (sin servidor)
-├── tests/               # smoke tests de los 5 endpoints
-└── data/                # BD SQLite + datasets generados (no versionado)
+                         ┌──────────────────────────────────────┐
+ Peticion HTTP           │         FastAPI  (api/)              │
+ POST /transactions ────►│                                      │
+                         │  ┌──────────────────────────────┐   │
+                         │  │   service.process_transaction │   │
+                         │  │                              │   │
+                         │  │  1. anonymize()              │   │
+                         │  │     regex (siempre)          │   │
+                         │  │     + Presidio NER (opcional)│   │
+                         │  │                              │   │
+                         │  │  2. classify()               │   │
+                         │  │     L1: clasificador local   │   │
+                         │  │     L2: Azure OpenAI LLM     │   │
+                         │  │         (casos dificiles)    │   │
+                         │  │                              │   │
+                         │  │  3. detect_anomaly()         │   │
+                         │  │     z-score por categoria    │   │
+                         │  │     + salto en suscripcion   │   │
+                         │  │                              │   │
+                         │  │  4. INSERT en SQLite         │   │
+                         │  └──────────────────────────────┘   │
+                         │                                      │
+                         │  POST /insights/generate             │
+                         │     agrega mes → prompt → LLM/tpl   │
+                         └──────────────────────────────────────┘
+                                          │
+                                    SQLite (data/)
+                                          │
+                         ┌────────────────▼─────────────────────┐
+                         │    Dashboard  (Streamlit)            │
+                         │  pantalla 1: transaccion individual  │
+                         │  pantalla 2: importar historico      │
+                         │  pantalla 3: insights del mes        │
+                         └──────────────────────────────────────┘
 ```
 
-## Estado de los componentes (dia 1)
+### Dos niveles de clasificacion
 
-| Componente     | Real                          | Fallback (activo ahora)            |
-|----------------|-------------------------------|------------------------------------|
-| Clasificador   | `models/load_classifier.py`   | mock por palabras clave            |
-| Anonimizacion  | Presidio + regex              | solo regex (si falta Presidio)     |
-| Insights       | Azure OpenAI gpt-4o-mini      | plantilla local (sin credenciales) |
+| Nivel | Quien          | Cuando                          | Coste  |
+|-------|----------------|---------------------------------|--------|
+| L1    | Modelo local   | siempre (primer intento)        | 0 EUR  |
+| L2    | Azure OpenAI   | confianza < umbral o sin match  | ~0.001 EUR/tx |
 
-`GET /health` indica que modo esta activo.
+El LLM recibe **unicamente la descripcion anonimizada** (nunca datos personales).
 
-## Puesta en marcha
+### Componentes con fallback
+
+| Componente    | Real                        | Fallback                        |
+|---------------|-----------------------------|---------------------------------|
+| Clasificador  | `models/load_classifier.py` | mock por palabras clave         |
+| Anonimizacion | Presidio + regex            | solo regex (si falta Presidio)  |
+| Insights      | Azure OpenAI gpt-4o-mini    | plantilla local determinista    |
+
+`GET /health` informa del modo activo de cada componente.
+
+---
+
+## Instalacion y puesta en marcha
+
+### Requisitos
+
+- Python 3.11, 3.12, 3.13 o 3.14
+- (Opcional) Credenciales Azure OpenAI para LLM real e insights
+- (Opcional) Python 3.11/3.12 + spacy para anonimizacion NER completa
+
+### 1. Entorno virtual e instalacion
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate            # Windows
+
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
-copy .env.example .env            # rellenar credenciales (opcional dia 1)
 ```
 
-### Arrancar la API
+### 2. Variables de entorno (opcionales)
+
+```bash
+copy .env.example .env    # Windows
+cp .env.example .env      # macOS / Linux
+```
+
+Editar `.env` con las credenciales Azure si se dispone de ellas:
+
+```
+AZURE_OPENAI_ENDPOINT=https://tu-recurso.openai.azure.com/
+AZURE_OPENAI_API_KEY=tu-clave
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+```
+
+Sin credenciales el sistema funciona igual, usando el clasificador mock y
+la plantilla de insights.
+
+### 3. Arrancar la API
 
 ```bash
 uvicorn api.main:app --reload
-# docs interactivas: http://127.0.0.1:8000/docs
+# Swagger interactivo: http://127.0.0.1:8000/docs
 ```
 
-### Arrancar el dashboard (en otra terminal, con la API levantada)
+### 4. Arrancar el dashboard (en otra terminal, con la API levantada)
 
 ```bash
 streamlit run dashboard/streamlit_app.py
+# Abre automaticamente http://localhost:8501
 ```
 
-### Verificacion rapida sin servidor
+### 5. (Opcional) Anonimizacion NER completa
+
+Requiere Python 3.11 o 3.12:
 
 ```bash
-python scripts/e2e_demo.py        # ejercita todo el pipeline e imprime resultados
+pip install presidio-analyzer presidio-anonymizer spacy
+python -m spacy download es_core_news_md
 ```
 
-### Generar datos de demo
+---
+
+## Demo end-to-end
+
+Un solo comando arranca la API, carga 6 meses de historico simulado,
+procesa 5 transacciones representativas (clara, ambigua, escalada a LLM,
+anomala y normal), genera el insight del mes y muestra las metricas:
 
 ```bash
-python scripts/generate_history.py --user user_demo --months 3
-# luego importar el CSV desde el dashboard o por POST /transactions/import
+python scripts/e2e_demo.py
 ```
+
+Salida esperada (resumida):
+
+```
+==============================================================
+  ClarityBank - Demo end-to-end  |  2026-05-27 08:25:47 UTC
+==============================================================
+
+  [1/5] Arrancando API ...  OK  (1.0 s)
+  [2/5] Historico (149 tx) importado  ...  OK  (0.9 s)
+
+  [3/5] Transacciones de demo
+  [CLARA       ] alimentacion     L1 92%      -43.27 EUR
+  [AMBIGUA     ] ingresos         L1 55%      150.00 EUR
+  [ESCALADA LLM] otros            L2 40%      -80.00 EUR
+  [ANOMALA     ] compras          L1 92%    -1450.00 EUR  <-- ANOMALIA
+  [NORMAL      ] suscripciones    L1 92%      -12.99 EUR
+
+  [4/5] Insight mensual generado (fuente: template)
+  [5/5] Metricas: 154 tx · 73 anomalias · 1 llamada LLM (0.6%)
+```
+
+---
 
 ## Endpoints
 
-| Metodo | Ruta                      | Descripcion                                  |
-|--------|---------------------------|----------------------------------------------|
-| POST   | `/transactions`           | procesa y guarda una transaccion             |
-| GET    | `/transactions/{user_id}` | historico del usuario                        |
-| POST   | `/transactions/import`    | importa CSV/JSON en lote                     |
-| POST   | `/insights/generate`      | insight en lenguaje natural de un mes        |
-| GET    | `/users/{user_id}/stats`  | agregados para el dashboard                  |
-| GET    | `/health`                 | estado y modo (real/mock) de cada componente |
+| Metodo | Ruta                           | Descripcion                              |
+|--------|--------------------------------|------------------------------------------|
+| GET    | `/health`                      | estado y modo (real/mock/fallback)       |
+| POST   | `/transactions`                | procesa y guarda una transaccion         |
+| GET    | `/transactions/{user_id}`      | historico del usuario                    |
+| POST   | `/transactions/import`         | importa CSV o JSON en lote               |
+| POST   | `/insights/generate`           | insight mensual en lenguaje natural      |
+| GET    | `/users/{user_id}/stats`       | agregados: gastos, ingresos, anomalias   |
+| GET    | `/users/{user_id}/cost-stats`  | estadisticas de coste LLM               |
+
+Swagger completo en `http://127.0.0.1:8000/docs` con la API levantada.
+
+---
 
 ## Categorias (lista cerrada de 12)
 
-`alimentacion, restauracion, transporte, ocio, compras, hogar, salud,
-suscripciones, transferencias, ingresos, impuestos_tasas, otros`
+`alimentacion · restauracion · transporte · ocio · compras · hogar · salud ·
+suscripciones · transferencias · ingresos · impuestos_tasas · otros`
+
+---
 
 ## Tests
 
 ```bash
-pytest -q
+pytest -q                  # toda la suite
+pytest -q --tb=short       # con traza compacta de fallos
 ```
 
-## Notas
+La suite cubre: endpoints de transacciones, anonimizacion por regex, deteccion
+de anomalias z-score y generacion de insights con LLM mockeado.
 
-- **Python 3.14**: `presidio-analyzer`/`spacy` pueden no tener wheel. El sistema
-  funciona igual (anonimizacion solo-regex). Para la capa NER completa, usar
-  Python 3.11/3.12 e instalar el modelo: `python -m spacy download es_core_news_md`.
-- El clasificador real lo entrega ML en `models/load_classifier.py`; el codigo lo
-  detecta y sustituye al mock sin cambios adicionales.
+---
+
+## Estructura del repositorio
+
+```
+clarity-bank/
+├── api/
+│   ├── main.py            # app FastAPI + /health + lifespan
+│   ├── config.py          # settings desde .env (pydantic-settings)
+│   ├── service.py         # pipeline unico: anon -> clasif -> anomalia -> save
+│   ├── routers/           # transactions.py, insights.py, users.py
+│   ├── models/            # schemas.py — contrato HTTP (pydantic)
+│   └── db/                # database.py (conexion SQLite) + queries.py (CRUD)
+├── core/
+│   ├── anonymization.py   # regex + Presidio NER (opcional)
+│   ├── classify.py        # mock o clasificador real (sustitucion transparente)
+│   ├── anomalies.py       # z-score por categoria + salto en suscripciones
+│   └── insights.py        # agregacion + prompt + LLM/plantilla
+├── models/
+│   ├── load_classifier.py # contrato load()/classify (ML lo implementa)
+│   └── model_metadata.json
+├── dashboard/
+│   └── streamlit_app.py   # 3 pantallas interactivas
+├── scripts/
+│   ├── generate_history.py # genera CSV de historico simulado
+│   └── e2e_demo.py         # demo real end-to-end
+├── tests/                  # suite pytest
+├── fases/                  # plan de trabajo por fases (fuente de verdad)
+├── data/                   # SQLite + datasets (no versionado)
+├── MEMORIA.md              # decisiones tecnicas y errores resueltos
+└── .env.example            # plantilla de variables de entorno
+```
+
+---
+
+## Decisiones tecnicas principales
+
+- **Pipeline unico** (`api/service.py`). Los endpoints `POST /transactions` y
+  `POST /transactions/import` comparten el mismo `process_transaction`. Evita
+  divergencia de comportamiento y simplifica los tests.
+
+- **Clasificador sustituible sin tocar codigo**. `core/classify.py` intenta
+  importar `models/load_classifier.load()`. Si falla (modelo no entregado aun),
+  cae al mock por palabras clave. El cambio es transparente: `GET /health`
+  reporta el modo activo.
+
+- **Anonimizacion degradable**. Regex es la capa base (siempre disponible);
+  Presidio + spacy se activa solo si esta instalado. La API arranca en cualquier
+  entorno sin dependencias pesadas.
+
+- **Dos niveles de coste con trazabilidad**. El nivel usado (L1 local vs L2 LLM)
+  se guarda en cada transaccion. `GET /users/{id}/cost-stats` ofrece el desglose.
+
+- **Insight con fallback de plantilla**. Sin credenciales Azure, `generate_insight`
+  produce un resumen determinista a partir de los agregados del mes. La demo nunca
+  depende del LLM.
+
+- **Timestamps ISO 8601 como texto en SQLite**. Se evita el conversor `PARSE_DECLTYPES`
+  (deprecado en Python 3.12+) que causaba fallos al leer columnas TIMESTAMP con el
+  formato `T` de ISO 8601.
+
+---
+
+## Limitaciones conocidas
+
+- **Prototipo, no produccion**: sin autenticacion, sin HTTPS, SQLite de un solo
+  fichero. Para escalar: PostgreSQL + autenticacion JWT + contenedores.
+- **Presidio/spacy no disponibles en Python 3.14** (sin wheel). Funciona solo-regex.
+  Para NER completo usar Python 3.11/3.12.
+- **Clasificador real pendiente**: hasta que ML entregue `models/load_classifier.py`
+  el sistema usa el mock por palabras clave (L1 siempre, L2 en caso de no-match).
+- **Deteccion de anomalias basada en historico**: necesita suficientes transacciones
+  previas para que el z-score sea significativo (minimo ~10 por categoria).
+- **Coste LLM**: las llamadas a Azure OpenAI por `POST /insights/generate` tienen
+  coste real si se usan credenciales de produccion.
+
+---
+
+## Memoria de desarrollo
+
+Las decisiones de diseno detalladas, errores encontrados y sus soluciones se
+documentan en [`MEMORIA.md`](MEMORIA.md).
+
+---
+
+---
+
+# ClarityBank — TFM Prototype (English)
+
+> **Status**: functional prototype · Python 3.11–3.14 · not for production
+
+## Description
+
+ClarityBank is the backend of a personal financial intelligence system for a
+simulated aggregator fintech (340 000 users, 2.1 M transactions/month).
+
+Three core features:
+
+1. **Automatic categorization** — raw transaction text → one of 12 categories.
+2. **Anomaly detection** — compares each transaction against the user's history
+   (z-score per category + subscription price jump detection).
+3. **Monthly insights in natural language** — narrative summary generated by
+   Azure OpenAI gpt-4o-mini or a local template if no credentials are available.
+
+## Quick Start
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+uvicorn api.main:app --reload          # API at http://127.0.0.1:8000/docs
+streamlit run dashboard/streamlit_app.py  # Dashboard at http://localhost:8501
+python scripts/e2e_demo.py             # Full end-to-end demo (no extra setup needed)
+```
+
+## API Endpoints
+
+| Method | Route                          | Description                             |
+|--------|--------------------------------|-----------------------------------------|
+| GET    | `/health`                      | system status and component modes       |
+| POST   | `/transactions`                | process and store a transaction         |
+| GET    | `/transactions/{user_id}`      | user transaction history                |
+| POST   | `/transactions/import`         | bulk import from CSV or JSON            |
+| POST   | `/insights/generate`           | monthly insight in natural language     |
+| GET    | `/users/{user_id}/stats`       | aggregates: spending, income, anomalies |
+| GET    | `/users/{user_id}/cost-stats`  | LLM cost statistics                     |
+
+## Two-level Classification
+
+| Level | Who             | When                              | Cost        |
+|-------|-----------------|-----------------------------------|-------------|
+| L1    | Local model     | always (first attempt)            | 0 EUR       |
+| L2    | Azure OpenAI    | low confidence or no keyword match| ~0.001 EUR  |
+
+Only **anonymized descriptions** are ever sent to the LLM (GDPR compliance).
+
+## Known Limitations
+
+- No authentication or HTTPS (prototype only).
+- Presidio/spacy unavailable on Python 3.14 (no wheel) — NER layer disabled, regex only.
+- Anomaly detection requires sufficient history (~10+ transactions per category).
+- Real ML classifier pending delivery from teammate (`models/load_classifier.py`).
+
+## Development Notes
+
+Design decisions and resolved bugs are documented in [`MEMORIA.md`](MEMORIA.md).
