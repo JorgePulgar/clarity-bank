@@ -8,12 +8,23 @@ Arrancar (con la API ya levantada):
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
+import csv
+import io
 import os
+import random
+import sys
 import time
+from pathlib import Path
 
 import pandas as pd
 import requests
 import streamlit as st
+
+# Permite importar scripts/ aunque el dashboard se arranque desde cualquier directorio.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.generate_history import generate as _gen_historico  # noqa: E402
 
 API_URL = os.environ.get("CLARITY_API_URL", "http://127.0.0.1:8000")
 
@@ -103,46 +114,108 @@ with tab1:
             st.error(f"Error al clasificar: {e}")
 
 
-# --- Pantalla 2: importar lote --------------------------------------------
+# --- Pantalla 2: importar historico ---------------------------------------
 with tab2:
-    st.subheader("Importar CSV o JSON")
-    st.caption("CSV con cabeceras: user_id, description, amount, [date]")
-    up = st.file_uploader("Fichero", type=["csv", "json"])
-    if up is not None and st.button("Procesar lote"):
-        try:
-            r = requests.post(
-                f"{API_URL}/transactions/import",
-                files={"file": (up.name, up.getvalue())},
-                timeout=60,
-            )
-            r.raise_for_status()
-            res = r.json()
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Recibidas", res["received"])
-            c2.metric("Procesadas", res["processed"])
-            c3.metric("Anomalias", res["anomalies"])
-            if res["errors"]:
-                st.warning("Errores:")
-                st.write(res["errors"])
-        except Exception as e:
-            st.error(f"Error: {e}")
+    st.subheader("Importar transacciones")
 
+    col_gen, col_up = st.columns([1, 1])
+
+    # Generar historico simulado
+    with col_gen:
+        st.markdown("**Generar historico simulado**")
+        st.caption("Crea un historico realista con gastos tipicos, nomina y outliers intencionados.")
+        meses = st.slider("Meses de historico", 1, 12, 6, key="gen_meses")
+        salario = st.number_input("Salario mensual (EUR)", value=2000.0, step=100.0, key="gen_salario")
+        ciudad = st.text_input("Ciudad (para nombres de comercios)", "MADRID", key="gen_ciudad").upper()
+        if st.button("Generar e importar historico", type="primary", key="btn_generar"):
+            try:
+                barra = st.progress(0, text="Generando transacciones...")
+                random.seed(42)
+                rows = _gen_historico(
+                    user=user_id, months=meses, per_month=50,
+                    salary=salario, ciudad=ciudad, n_suscripciones=3,
+                )
+                barra.progress(40, text=f"Generadas {len(rows)} transacciones. Importando...")
+                buf = io.StringIO()
+                w = csv.DictWriter(buf, fieldnames=["user_id", "description", "amount", "date"])
+                w.writeheader()
+                w.writerows(rows)
+                r = requests.post(
+                    f"{API_URL}/transactions/import",
+                    files={"file": ("historico.csv", buf.getvalue().encode("utf-8"), "text/csv")},
+                    timeout=120,
+                )
+                barra.progress(100, text="Importacion completada.")
+                r.raise_for_status()
+                res = r.json()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Recibidas", res["received"])
+                c2.metric("Procesadas", res["processed"])
+                c3.metric("Anomalias detectadas", res["anomalies"])
+            except Exception as e:
+                st.error(f"Error al generar/importar: {e}")
+
+    # Subir CSV propio
+    with col_up:
+        st.markdown("**Subir CSV propio**")
+        st.caption("Columnas: `user_id`, `description`, `amount`, `date` (opcional).")
+        up = st.file_uploader("Fichero CSV o JSON", type=["csv", "json"], key="up_fichero")
+        if up is not None and st.button("Importar fichero", key="btn_importar"):
+            try:
+                with st.spinner("Importando..."):
+                    r = requests.post(
+                        f"{API_URL}/transactions/import",
+                        files={"file": (up.name, up.getvalue())},
+                        timeout=120,
+                    )
+                r.raise_for_status()
+                res = r.json()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Recibidas", res["received"])
+                c2.metric("Procesadas", res["processed"])
+                c3.metric("Anomalias detectadas", res["anomalies"])
+                if res["errors"]:
+                    st.warning("Errores en algunas filas:")
+                    st.write(res["errors"][:5])
+            except Exception as e:
+                st.error(f"Error al importar: {e}")
+
+    # Resumen del usuario
     st.divider()
-    st.subheader(f"Estadisticas de {user_id}")
-    if st.button("Actualizar stats"):
+    st.subheader(f"Resumen de {user_id}")
+    if st.button("Actualizar resumen", key="btn_stats"):
         try:
             s = requests.get(f"{API_URL}/users/{user_id}/stats", timeout=10).json()
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Transacciones", s["n_transactions"])
-            c2.metric("Gastos", f"{s['total_gastos']:.2f}")
-            c3.metric("Ingresos", f"{s['total_ingresos']:.2f}")
+            c2.metric("Gastos totales", f"{s['total_gastos']:.2f} EUR")
+            c3.metric("Ingresos totales", f"{s['total_ingresos']:.2f} EUR")
             c4.metric("Anomalias", s["n_anomalies"])
             if s["by_category"]:
                 df = pd.DataFrame(s["by_category"])
-                st.bar_chart(df.set_index("category")["total"])
-                st.dataframe(df, use_container_width=True)
+                df_gastos = df[df["total"] < 0].copy()
+                df_gastos["total"] = df_gastos["total"].abs()
+                if not df_gastos.empty:
+                    st.bar_chart(df_gastos.set_index("category")["total"], use_container_width=True)
+                # Tabla completa + lista de anomalias
+                col_tabla, col_anom = st.columns([2, 1])
+                with col_tabla:
+                    st.dataframe(df.rename(columns={"category": "Categoria", "n": "N", "total": "Total EUR"}),
+                                 use_container_width=True)
+                with col_anom:
+                    st.caption("Anomalias recientes")
+                    try:
+                        txs = requests.get(f"{API_URL}/transactions/{user_id}", timeout=10).json()
+                        anomalias = [t for t in txs if t.get("is_anomaly")][:10]
+                        if anomalias:
+                            for a in anomalias:
+                                st.warning(f"{a['category']}: {a['anomaly_reason']}", icon=None)
+                        else:
+                            st.info("Sin anomalias registradas.")
+                    except Exception:
+                        st.caption("No se pudieron cargar anomalias.")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error al cargar stats: {e}")
 
 
 # --- Pantalla 3: insights --------------------------------------------------
