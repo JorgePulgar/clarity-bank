@@ -6,7 +6,7 @@ vez, cada tarea = un commit, y se marca `[x]` al cerrarla. Decisiones y errores 
 | Fase | Archivo | Estado |
 |------|---------|--------|
 | 1 | [Cimientos](FASE_1_cimientos.md) | COMPLETADA |
-| 2 | [Anonimizacion RGPD](FASE_2_anonimizacion.md) | EN CURSO |
+| 2 | [Anonimizacion RGPD](FASE_2_anonimizacion.md) | COMPLETADA |
 | 3 | [Anomalias + historico](FASE_3_anomalias_historico.md) | EN CURSO |
 | 4 | [Insights + modelo + coste](FASE_4_insights_modelo_coste.md) | PENDIENTE |
 | 5 | [Dashboard completo](FASE_5_dashboard.md) | PENDIENTE |

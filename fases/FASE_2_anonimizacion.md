@@ -1,6 +1,6 @@
 # Fase 2 — Anonimizacion RGPD
 
-**Estado:** EN CURSO (base hecha en fase 1)
+**Estado:** COMPLETADA
 **Objetivo:** pipeline de anonimizacion robusto y verificable. Ningun dato personal se
 persiste crudo en campos anonimizados ni sale al LLM.
 
@@ -18,8 +18,8 @@ persiste crudo en campos anonimizados ni sale al LLM.
       `TRANSFERENCIA A` → sustituir el nombre por `<PERSONA>`. (c80ae22)
 - [x] Regex para cuentas parcialmente enmascaradas (`*****1234`) → `<CUENTA>`. (c80ae22)
 - [x] Logging por request de **que** se anonimizo (tipos y conteos), nunca el dato original.
-- [ ] Suite de tests con ≥10 casos representativos (BIZUM DE nombre, IBAN, DNI, email,
-      telefono, cuenta enmascarada, texto sin PII, idempotencia, etc.).
+- [x] Suite de tests con ≥10 casos representativos (BIZUM DE nombre, IBAN, DNI, email,
+      telefono, cuenta enmascarada, texto sin PII, idempotencia, etc.). 16 tests.
 
 ## Criterio de done
 
