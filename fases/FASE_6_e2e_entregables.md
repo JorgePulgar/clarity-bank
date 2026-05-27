@@ -1,6 +1,6 @@
 # Fase 6 — Integracion end-to-end + entregables finales
 
-**Estado:** PENDIENTE (e2e en proceso y README inicial hechos en fase 1)
+**Estado:** COMPLETADA
 **Objetivo:** demo reproducible de un comando + repo presentable.
 
 > Base ya existente: `scripts/e2e_demo.py` ejercita el pipeline **en proceso** (sin servidor).
@@ -15,11 +15,11 @@
 - [x] README final bilingue (espanol primero, ingles debajo): descripcion, arquitectura (diagrama),
       instalacion/ejecucion paso a paso, como correr la demo e2e, decisiones tecnicas, limitaciones,
       enlace a la memoria, stack con badges. → docs(readme)[F6] commit
-- [ ] Limpieza: quitar prints de debug e imports no usados, docstrings en todas las funciones
-      publicas, formateo con black + ruff.
-- [ ] Tests finales: suite completa (endpoints, anonimizacion, anomalias, insights con LLM mockeado);
-      coverage minimo 60% en modulos criticos.
-- [ ] Swagger profesional: modelos pydantic con `description` y `example` en sus campos.
+- [x] Limpieza: quitar prints de debug e imports no usados, docstrings en todas las funciones
+      publicas, formateo con black + ruff. → chore(clean)[F6] commit
+- [x] Tests finales: suite completa (endpoints, anonimizacion, anomalias, insights con LLM mockeado);
+      coverage minimo 60% en modulos criticos (todos >65%). → test(insights+api)[F6] commit
+- [x] Swagger profesional: modelos pydantic con `description` y `example` en sus campos. → feat(swagger)[F6] commit
 
 ## Criterio de done
 
