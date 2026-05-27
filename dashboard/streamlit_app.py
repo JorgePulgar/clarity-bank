@@ -31,6 +31,18 @@ with st.sidebar:
         st.error(f"API no disponible: {e}")
     st.divider()
     user_id = st.text_input("user_id", value="user_demo")
+    st.divider()
+    st.header("Panel de Coste")
+    try:
+        cs = requests.get(f"{API_URL}/users/{user_id}/cost-stats", timeout=3).json()
+        c1, c2 = st.columns(2)
+        c1.metric("Transacciones", cs["n_transactions"])
+        c2.metric("Nivel 2 (LLM)", cs["n_llm_calls"])
+        c3, c4 = st.columns(2)
+        c3.metric("Insights", cs["n_insights"])
+        c4.metric("Coste est. EUR", f"{cs['total_cost_eur']:.4f}")
+    except Exception:
+        st.caption("Sin datos de coste")
 
 tab1, tab2, tab3 = st.tabs(["Transaccion individual", "Importar lote", "Insights"])
 

@@ -69,6 +69,9 @@ class InsightResponse(BaseModel):
         ..., description="'llm' si lo genero Azure OpenAI, 'template' si fallback local"
     )
     n_transactions: int
+    cost_eur_estimate: Optional[float] = Field(
+        None, description="Coste estimado en EUR de la llamada al LLM (None si se uso plantilla)"
+    )
 
 
 # --- /users/{id}/stats -----------------------------------------------------
@@ -85,4 +88,12 @@ class UserStats(BaseModel):
     total_gastos: float
     total_ingresos: float
     n_anomalies: int
+    n_llm_calls: int = 0
     by_category: list[CategoryStat]
+
+
+class CostStats(BaseModel):
+    n_transactions: int
+    n_llm_calls: int
+    n_insights: int
+    total_cost_eur: float

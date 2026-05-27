@@ -1,6 +1,7 @@
 """Operaciones CRUD sobre SQLite. Sin logica de negocio: solo lee/escribe."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -128,11 +129,60 @@ def get_user_stats(user_id: str) -> dict[str, Any]:
             (user_id,),
         ).fetchall()
 
+        n_llm = conn.execute(
+            "SELECT COUNT(*) AS n FROM transactions WHERE user_id = ? AND classification_level = 2",
+            (user_id,),
+        ).fetchone()["n"]
+
     return {
         "user_id": user_id,
         "n_transactions": totals["n_transactions"],
         "total_gastos": round(totals["total_gastos"], 2),
         "total_ingresos": round(totals["total_ingresos"], 2),
         "n_anomalies": totals["n_anomalies"],
+        "n_llm_calls": n_llm,
         "by_category": [dict(r) for r in by_cat],
+    }
+
+
+def record_insight_call(
+    user_id: str,
+    month: str,
+    source: str,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    cost_eur: float = 0.0,
+) -> None:
+    """Registra una llamada al endpoint de insights (para el panel de coste)."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO insight_calls
+                (id, user_id, month, source, prompt_tokens, completion_tokens, cost_eur, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (uuid.uuid4().hex, user_id, month, source, prompt_tokens, completion_tokens, cost_eur, _now()),
+        )
+
+
+def get_cost_stats(user_id: str) -> dict[str, Any]:
+    """Estadisticas de coste del usuario: transacciones LLM e insights generados."""
+    with get_connection() as conn:
+        tx_row = conn.execute(
+            "SELECT COUNT(*) AS n FROM transactions WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        llm_row = conn.execute(
+            "SELECT COUNT(*) AS n FROM transactions WHERE user_id = ? AND classification_level = 2",
+            (user_id,),
+        ).fetchone()
+        ins_row = conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(cost_eur), 0) AS total FROM insight_calls WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    return {
+        "n_transactions": tx_row["n"],
+        "n_llm_calls": llm_row["n"],
+        "n_insights": ins_row["n"],
+        "total_cost_eur": round(ins_row["total"], 6),
     }

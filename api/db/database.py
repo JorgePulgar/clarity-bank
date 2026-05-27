@@ -33,6 +33,17 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_tx_user   ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date   ON transactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_tx_cat    ON transactions(category);
+
+CREATE TABLE IF NOT EXISTS insight_calls (
+    id                TEXT PRIMARY KEY,
+    user_id           TEXT NOT NULL REFERENCES users(id),
+    month             TEXT NOT NULL,
+    source            TEXT NOT NULL,
+    prompt_tokens     INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    cost_eur          REAL DEFAULT 0,
+    created_at        TIMESTAMP NOT NULL
+);
 """
 
 
