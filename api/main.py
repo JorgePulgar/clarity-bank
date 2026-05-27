@@ -4,6 +4,7 @@ Arrancar en local:
     uvicorn api.main:app --reload
 Docs interactivas: http://127.0.0.1:8000/docs
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -19,7 +20,7 @@ from core.classify import using_real_model
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Crea las tablas al arrancar (idempotente).
+    """Crea las tablas SQLite al arrancar (idempotente)."""
     init_db()
     yield
 

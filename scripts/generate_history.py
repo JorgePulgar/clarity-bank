@@ -7,6 +7,7 @@ Uso:
     python scripts/generate_history.py --user-id demo-user
     python scripts/generate_history.py --user-id u1 --months 6 --salary 2800 --city BARCELONA
 """
+
 from __future__ import annotations
 
 import argparse
@@ -82,7 +83,14 @@ def generate(
         base = (hoy - timedelta(days=31 * m)).replace(day=1)
 
         # Nomina al inicio del mes
-        rows.append(_row(user, f"ABONO NOMINA EMPRESA SL {ciudad}", salary, base + timedelta(days=1)))
+        rows.append(
+            _row(
+                user,
+                f"ABONO NOMINA EMPRESA SL {ciudad}",
+                salary,
+                base + timedelta(days=1),
+            )
+        )
 
         # Suscripciones fijas el dia 5
         for desc, importe in suscripciones:
@@ -109,12 +117,14 @@ def generate(
         rows.append(_row(user, desc_sub, -precio_nuevo, hoy + timedelta(days=5)))
 
     # 4. Gasto de alimentacion extremo
-    rows.append(_row(
-        user,
-        f"PAGO TARJETA MERCADONA SL {ciudad}",
-        -820.00,
-        hoy + timedelta(days=6),
-    ))
+    rows.append(
+        _row(
+            user,
+            f"PAGO TARJETA MERCADONA SL {ciudad}",
+            -820.00,
+            hoy + timedelta(days=6),
+        )
+    )
 
     # 5. Transferencia sospechosa (importe alto, fuera del patron alquiler)
     rows.append(_row(user, "TRANSFERENCIA BIZUM VARIOS", -950.00, hoy + timedelta(days=7)))
@@ -123,13 +133,25 @@ def generate(
 
 
 def main() -> None:
+    """CLI: parsea argumentos, genera el historico y lo guarda como CSV en data/."""
     p = argparse.ArgumentParser(description="Genera historico simulado (CSV) para demo.")
     p.add_argument("--user-id", default="demo-user", help="ID del usuario destino")
     p.add_argument("--months", type=int, default=6, help="Meses de historico a generar")
-    p.add_argument("--per-month", type=int, default=50, help="Transacciones por mes (sin nomina ni suscripciones)")
+    p.add_argument(
+        "--per-month",
+        type=int,
+        default=50,
+        help="Transacciones por mes (sin nomina ni suscripciones)",
+    )
     p.add_argument("--salary", type=float, default=2000.0, help="Importe de la nomina mensual")
     p.add_argument("--city", default="MADRID", help="Ciudad para nombres de comercios")
-    p.add_argument("--subscriptions", type=int, default=3, choices=range(0, 6), help="Numero de suscripciones (0-5)")
+    p.add_argument(
+        "--subscriptions",
+        type=int,
+        default=3,
+        choices=range(0, 6),
+        help="Numero de suscripciones (0-5)",
+    )
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
 
@@ -151,7 +173,9 @@ def main() -> None:
         w.writerows(rows)
 
     n_outliers = 5 if args.subscriptions > 0 else 4
-    print(f"Generadas {len(rows)} transacciones ({args.months} meses, {n_outliers} outliers) -> {out}")
+    print(
+        f"Generadas {len(rows)} transacciones ({args.months} meses, {n_outliers} outliers) -> {out}"
+    )
 
 
 if __name__ == "__main__":

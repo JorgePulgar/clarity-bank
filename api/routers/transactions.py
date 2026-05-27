@@ -1,4 +1,5 @@
 """Endpoints de transacciones: crear, listar e importar en lote."""
+
 from __future__ import annotations
 
 import csv

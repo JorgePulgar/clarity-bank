@@ -1,4 +1,5 @@
 """Fixtures de test. Aisla la BD usando un fichero SQLite temporal."""
+
 from __future__ import annotations
 
 import os

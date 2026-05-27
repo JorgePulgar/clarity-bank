@@ -1,4 +1,5 @@
 """Tests de humo: la API arranca y los 5 endpoints responden con datos coherentes."""
+
 from __future__ import annotations
 
 import io
@@ -13,11 +14,14 @@ def test_health(client):
 
 
 def test_create_transaction(client):
-    r = client.post("/transactions", json={
-        "user_id": USER,
-        "description": "PAGO TARJETA MERCADONA SL MADRID",
-        "amount": -43.27,
-    })
+    r = client.post(
+        "/transactions",
+        json={
+            "user_id": USER,
+            "description": "PAGO TARJETA MERCADONA SL MADRID",
+            "amount": -43.27,
+        },
+    )
     assert r.status_code == 201
     data = r.json()
     assert data["category"] == "alimentacion"
@@ -27,11 +31,14 @@ def test_create_transaction(client):
 
 
 def test_anonymization_strips_pii(client):
-    r = client.post("/transactions", json={
-        "user_id": USER,
-        "description": "TRANSFERENCIA ES9121000418450200051332 juan@mail.com 612345678",
-        "amount": -200.0,
-    })
+    r = client.post(
+        "/transactions",
+        json={
+            "user_id": USER,
+            "description": "TRANSFERENCIA ES9121000418450200051332 juan@mail.com 612345678",
+            "amount": -200.0,
+        },
+    )
     assert r.status_code == 201
     anon = r.json()["description_anonymized"]
     assert "ES9121000418450200051332" not in anon
@@ -40,9 +47,14 @@ def test_anonymization_strips_pii(client):
 
 
 def test_list_transactions(client):
-    client.post("/transactions", json={
-        "user_id": USER, "description": "NETFLIX SUSCRIPCION", "amount": -12.99,
-    })
+    client.post(
+        "/transactions",
+        json={
+            "user_id": USER,
+            "description": "NETFLIX SUSCRIPCION",
+            "amount": -12.99,
+        },
+    )
     r = client.get(f"/transactions/{USER}")
     assert r.status_code == 200
     assert isinstance(r.json(), list)
@@ -66,9 +78,14 @@ def test_import_csv(client):
 
 
 def test_user_stats(client):
-    client.post("/transactions", json={
-        "user_id": USER, "description": "ABONO NOMINA EMPRESA SL", "amount": 1800.0,
-    })
+    client.post(
+        "/transactions",
+        json={
+            "user_id": USER,
+            "description": "ABONO NOMINA EMPRESA SL",
+            "amount": 1800.0,
+        },
+    )
     r = client.get(f"/users/{USER}/stats")
     assert r.status_code == 200
     s = r.json()
@@ -78,9 +95,15 @@ def test_user_stats(client):
 
 
 def test_generate_insight(client):
-    client.post("/transactions", json={
-        "user_id": USER, "description": "MERCADONA", "amount": -30.0, "date": "2026-04-10T10:00:00",
-    })
+    client.post(
+        "/transactions",
+        json={
+            "user_id": USER,
+            "description": "MERCADONA",
+            "amount": -30.0,
+            "date": "2026-04-10T10:00:00",
+        },
+    )
     r = client.post("/insights/generate", json={"user_id": USER, "month": "2026-04"})
     assert r.status_code == 200
     data = r.json()

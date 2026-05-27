@@ -8,13 +8,13 @@
 
 ## Tareas
 
-- [ ] Reescribir `scripts/e2e_demo.py` para demo real: arranca la API en subprocess, healthcheck
+- [x] Reescribir `scripts/e2e_demo.py` para demo real: arranca la API en subprocess, healthcheck
       hasta que responda, crea "demo-presentation", genera y carga historico, procesa 5 transacciones
       (clara, ambigua, escalada a LLM, anomala, normal), genera insight del mes, imprime resumen con
-      metricas. Logging narrativo para la presentacion.
-- [ ] README final bilingue (espanol primero, ingles debajo): descripcion, arquitectura (diagrama),
+      metricas. Logging narrativo para la presentacion. → feat(e2e)[F6] commit
+- [x] README final bilingue (espanol primero, ingles debajo): descripcion, arquitectura (diagrama),
       instalacion/ejecucion paso a paso, como correr la demo e2e, decisiones tecnicas, limitaciones,
-      enlace a la memoria, stack con badges.
+      enlace a la memoria, stack con badges. → docs(readme)[F6] commit
 - [ ] Limpieza: quitar prints de debug e imports no usados, docstrings en todas las funciones
       publicas, formateo con black + ruff.
 - [ ] Tests finales: suite completa (endpoints, anonimizacion, anomalias, insights con LLM mockeado);

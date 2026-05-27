@@ -1,7 +1,7 @@
 """Tests de anonimizacion. Cubre los 12 tipos de PII y casos borde."""
+
 from __future__ import annotations
 
-import pytest
 
 from core.anonymization import anonymize
 
@@ -17,6 +17,7 @@ def entities(text: str) -> dict[str, int]:
 
 
 # --- Casos de sustitucion -------------------------------------------------
+
 
 def test_iban():
     resultado = anon("Transferencia recibida de ES2114650100722030876293")
@@ -82,6 +83,7 @@ def test_transferencia_a():
 
 # --- Texto sin PII --------------------------------------------------------
 
+
 def test_texto_limpio():
     texto = "Compra supermercado Mercadona 45.20 EUR"
     assert anon(texto) == texto
@@ -94,6 +96,7 @@ def test_texto_vacio():
 
 
 # --- Dict de entidades ----------------------------------------------------
+
 
 def test_dict_iban():
     ents = entities("Pago a ES2114650100722030876293")
@@ -113,6 +116,7 @@ def test_dict_persona():
 
 
 # --- Idempotencia ---------------------------------------------------------
+
 
 def test_idempotencia():
     texto = "BIZUM DE Juan Garcia IBAN ES2114650100722030876293"

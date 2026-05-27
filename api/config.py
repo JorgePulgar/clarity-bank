@@ -3,6 +3,7 @@
 Una sola fuente de verdad para rutas, credenciales y parametros.
 Importar `settings` desde aqui en el resto del codigo.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

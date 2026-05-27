@@ -1,4 +1,5 @@
 """Endpoint de estadisticas agregadas de usuario (para el dashboard)."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

@@ -2,6 +2,7 @@
 
 SQLite es deliberado: prototipo, no produccion (ver CLAUDE.md del proyecto).
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -51,7 +52,7 @@ def _connect() -> sqlite3.Connection:
     # Sin detect_types: los timestamps se guardan/leen como texto ISO 8601 (lo que
     # produce/espera la API). PARSE_DECLTYPES activaria el conversor deprecado de 3.12+.
     conn = sqlite3.connect(settings.db_path)
-    conn.row_factory = sqlite3.Row          # filas accesibles por nombre de columna
+    conn.row_factory = sqlite3.Row  # filas accesibles por nombre de columna
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 

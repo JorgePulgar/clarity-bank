@@ -6,6 +6,7 @@ Habla con la API por HTTP (no toca la BD directamente) para reflejar el flujo re
 Arrancar (con la API ya levantada):
     streamlit run dashboard/streamlit_app.py
 """
+
 from __future__ import annotations
 
 from __future__ import annotations
@@ -92,11 +93,13 @@ with st.sidebar:
         st.session_state["user_id"] = uid
         st.rerun()
 
-tab1, tab2, tab3 = st.tabs([
-    "Transaccion individual",
-    "Importar historico",
-    "Insights mensuales",
-])
+tab1, tab2, tab3 = st.tabs(
+    [
+        "Transaccion individual",
+        "Importar historico",
+        "Insights mensuales",
+    ]
+)
 
 
 # --- Pantalla 1: transaccion individual -----------------------------------
@@ -106,7 +109,9 @@ with tab1:
     with st.form("tx_form"):
         desc = st.text_input("Descripcion del movimiento", "PAGO TARJETA MERCADONA SL MADRID")
         amount = st.number_input(
-            "Importe (EUR)", value=-43.27, step=1.0,
+            "Importe (EUR)",
+            value=-43.27,
+            step=1.0,
             help="Negativo = gasto, positivo = ingreso",
         )
         submitted = st.form_submit_button("Clasificar", type="primary")
@@ -163,17 +168,27 @@ with tab2:
     # Generar historico simulado
     with col_gen:
         st.markdown("**Generar historico simulado**")
-        st.caption("Crea un historico realista con gastos tipicos, nomina y outliers intencionados.")
+        st.caption(
+            "Crea un historico realista con gastos tipicos, nomina y outliers intencionados."
+        )
         meses = st.slider("Meses de historico", 1, 12, 6, key="gen_meses")
-        salario = st.number_input("Salario mensual (EUR)", value=2000.0, step=100.0, key="gen_salario")
-        ciudad = st.text_input("Ciudad (para nombres de comercios)", "MADRID", key="gen_ciudad").upper()
+        salario = st.number_input(
+            "Salario mensual (EUR)", value=2000.0, step=100.0, key="gen_salario"
+        )
+        ciudad = st.text_input(
+            "Ciudad (para nombres de comercios)", "MADRID", key="gen_ciudad"
+        ).upper()
         if st.button("Generar e importar historico", type="primary", key="btn_generar"):
             try:
                 barra = st.progress(0, text="Generando transacciones...")
                 random.seed(42)
                 rows = _gen_historico(
-                    user=user_id, months=meses, per_month=50,
-                    salary=salario, ciudad=ciudad, n_suscripciones=3,
+                    user=user_id,
+                    months=meses,
+                    per_month=50,
+                    salary=salario,
+                    ciudad=ciudad,
+                    n_suscripciones=3,
                 )
                 barra.progress(40, text=f"Generadas {len(rows)} transacciones. Importando...")
                 buf = io.StringIO()
@@ -182,7 +197,13 @@ with tab2:
                 w.writerows(rows)
                 r = requests.post(
                     f"{API_URL}/transactions/import",
-                    files={"file": ("historico.csv", buf.getvalue().encode("utf-8"), "text/csv")},
+                    files={
+                        "file": (
+                            "historico.csv",
+                            buf.getvalue().encode("utf-8"),
+                            "text/csv",
+                        )
+                    },
                     timeout=120,
                 )
                 barra.progress(100, text="Importacion completada.")
@@ -236,12 +257,23 @@ with tab2:
                 df_gastos = df[df["total"] < 0].copy()
                 df_gastos["total"] = df_gastos["total"].abs()
                 if not df_gastos.empty:
-                    st.bar_chart(df_gastos.set_index("category")["total"], use_container_width=True)
+                    st.bar_chart(
+                        df_gastos.set_index("category")["total"],
+                        use_container_width=True,
+                    )
                 # Tabla completa + lista de anomalias
                 col_tabla, col_anom = st.columns([2, 1])
                 with col_tabla:
-                    st.dataframe(df.rename(columns={"category": "Categoria", "n": "N", "total": "Total EUR"}),
-                                 use_container_width=True)
+                    st.dataframe(
+                        df.rename(
+                            columns={
+                                "category": "Categoria",
+                                "n": "N",
+                                "total": "Total EUR",
+                            }
+                        ),
+                        use_container_width=True,
+                    )
                 with col_anom:
                     st.caption("Anomalias recientes")
                     try:

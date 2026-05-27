@@ -6,6 +6,7 @@ muestra metricas finales. Logging narrativo para presentacion oral.
 Uso:
     python scripts/e2e_demo.py
 """
+
 from __future__ import annotations
 
 import csv
@@ -30,17 +31,18 @@ HEALTHCHECK_TIMEOUT = 30  # segundos maximos esperando a que arranque la API
 # 5 transacciones de demo, cada una representa un escenario distinto del pipeline.
 DEMO_TRANSACTIONS: list[tuple[str, str, float]] = [
     # (etiqueta, descripcion, importe)
-    ("CLARA",        "MERCADONA SUPERMERCADOS MADRID",       -43.27),
-    ("AMBIGUA",      "REINTEGRO CONCEPTOS VARIOS CUENTA",    150.00),
-    ("ESCALADA LLM", "CUOTA ASOCIACION CULTURAL MADRID",     -80.00),
-    ("ANOMALA",      "AMAZON COMPRA ONLINE",                -1450.00),
-    ("NORMAL",       "NETFLIX SUSCRIPCION MENSUAL",          -12.99),
+    ("CLARA", "MERCADONA SUPERMERCADOS MADRID", -43.27),
+    ("AMBIGUA", "REINTEGRO CONCEPTOS VARIOS CUENTA", 150.00),
+    ("ESCALADA LLM", "CUOTA ASOCIACION CULTURAL MADRID", -80.00),
+    ("ANOMALA", "AMAZON COMPRA ONLINE", -1450.00),
+    ("NORMAL", "NETFLIX SUSCRIPCION MENSUAL", -12.99),
 ]
 
 
 # ---------------------------------------------------------------------------
 # Utilidades de presentacion
 # ---------------------------------------------------------------------------
+
 
 def _sep(title: str = "", index: str = "") -> None:
     """Imprime un separador de seccion con titulo opcional."""
@@ -60,6 +62,7 @@ def _tick() -> float:
 # Pasos del demo
 # ---------------------------------------------------------------------------
 
+
 def _cleanup_demo_user() -> None:
     """Elimina datos previos del usuario demo para que cada ejecucion sea reproducible."""
     from api.db import init_db
@@ -77,11 +80,16 @@ def _start_api() -> subprocess.Popen:
     """Arranca uvicorn como subprocess en el puerto configurado."""
     _sep("Arrancando API", "1/5")
     cmd = [
-        sys.executable, "-m", "uvicorn",
+        sys.executable,
+        "-m",
+        "uvicorn",
         "api.main:app",
-        "--host", "127.0.0.1",
-        "--port", str(API_PORT),
-        "--log-level", "warning",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(API_PORT),
+        "--log-level",
+        "warning",
     ]
     print(f"  CMD: {' '.join(cmd)}")
     return subprocess.Popen(
@@ -280,6 +288,7 @@ def _print_summary(health: dict, n_imported: int, demo_results: list[dict]) -> N
 # ---------------------------------------------------------------------------
 # Punto de entrada
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Orquesta el flujo completo de la demo end-to-end."""

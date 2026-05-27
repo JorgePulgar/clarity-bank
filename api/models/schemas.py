@@ -2,6 +2,7 @@
 
 Define el contrato HTTP. Independiente del esquema SQL (que vive en api/db).
 """
+
 from __future__ import annotations
 
 from typing import Literal, Optional
@@ -10,19 +11,32 @@ from pydantic import BaseModel, Field
 
 # Lista cerrada de 12 categorias (ver CLAUDE.md). Usada como type para validar.
 Categoria = Literal[
-    "alimentacion", "restauracion", "transporte", "ocio", "compras", "hogar",
-    "salud", "suscripciones", "transferencias", "ingresos", "impuestos_tasas", "otros",
+    "alimentacion",
+    "restauracion",
+    "transporte",
+    "ocio",
+    "compras",
+    "hogar",
+    "salud",
+    "suscripciones",
+    "transferencias",
+    "ingresos",
+    "impuestos_tasas",
+    "otros",
 ]
 
 
 # --- /transactions ---------------------------------------------------------
+
 
 class TransactionIn(BaseModel):
     """Transaccion cruda que entra al sistema."""
 
     user_id: str = Field(..., examples=["user_0001"])
     description: str = Field(..., examples=["PAGO TARJETA MERCADONA SL MADRID"])
-    amount: float = Field(..., description="Negativo = gasto, positivo = ingreso", examples=[-43.27])
+    amount: float = Field(
+        ..., description="Negativo = gasto, positivo = ingreso", examples=[-43.27]
+    )
     # Opcional: fecha del movimiento. Si falta, se usa el instante de ingesta.
     date: Optional[str] = Field(None, description="ISO 8601; por defecto 'ahora'")
 
@@ -45,6 +59,7 @@ class TransactionOut(BaseModel):
 
 # --- /transactions/import --------------------------------------------------
 
+
 class ImportResult(BaseModel):
     """Resumen de una importacion en lote."""
 
@@ -55,6 +70,7 @@ class ImportResult(BaseModel):
 
 
 # --- /insights/generate ----------------------------------------------------
+
 
 class InsightRequest(BaseModel):
     user_id: str = Field(..., examples=["user_0001"])
@@ -70,11 +86,13 @@ class InsightResponse(BaseModel):
     )
     n_transactions: int
     cost_eur_estimate: Optional[float] = Field(
-        None, description="Coste estimado en EUR de la llamada al LLM (None si se uso plantilla)"
+        None,
+        description="Coste estimado en EUR de la llamada al LLM (None si se uso plantilla)",
     )
 
 
 # --- /users/{id}/stats -----------------------------------------------------
+
 
 class CategoryStat(BaseModel):
     category: Optional[str]

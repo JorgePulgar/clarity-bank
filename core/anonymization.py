@@ -14,6 +14,7 @@ Asi la API arranca aunque presidio no este disponible (p.ej. sin wheel para 3.14
 La funcion publica `anonymize` devuelve (texto_anonimizado, entidades) donde
 entidades es un dict tipo -> nº ocurrencias, sin exponer el valor original.
 """
+
 from __future__ import annotations
 
 import re
@@ -65,9 +66,9 @@ def _regex_anonymize(text: str) -> tuple[str, dict[str, int]]:
 
 # --- Capa 2: Presidio (lazy, opcional) ------------------------------------
 
-_analyzer = None            # presidio AnalyzerEngine | None
-_anonymizer = None          # presidio AnonymizerEngine | None
-_presidio_ready: Optional[bool] = None   # None = aun no intentado
+_analyzer = None  # presidio AnalyzerEngine | None
+_anonymizer = None  # presidio AnonymizerEngine | None
+_presidio_ready: Optional[bool] = None  # None = aun no intentado
 
 
 def _init_presidio() -> bool:
@@ -89,9 +90,7 @@ def _init_presidio() -> bool:
                 "models": [{"lang_code": "es", "model_name": settings.presidio_spacy_model}],
             }
         )
-        _analyzer = AnalyzerEngine(
-            nlp_engine=provider.create_engine(), supported_languages=["es"]
-        )
+        _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine(), supported_languages=["es"])
         _anonymizer = AnonymizerEngine()
         _presidio_ready = True
     except Exception:
@@ -112,6 +111,7 @@ def _presidio_anonymize(text: str) -> tuple[str, dict[str, int]]:
 
 
 # --- API publica ----------------------------------------------------------
+
 
 def anonymize(text: str) -> tuple[str, dict[str, int]]:
     """Anonimiza texto y devuelve (texto_anonimizado, entidades).

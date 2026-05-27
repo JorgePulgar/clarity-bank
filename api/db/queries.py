@@ -1,9 +1,10 @@
 """Operaciones CRUD sobre SQLite. Sin logica de negocio: solo lee/escribe."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from api.db.database import get_connection
 
@@ -13,6 +14,7 @@ def _now() -> str:
 
 
 # --- users -----------------------------------------------------------------
+
 
 def ensure_user(user_id: str) -> None:
     """Crea el usuario si no existe (no falla si ya existe)."""
@@ -24,12 +26,14 @@ def ensure_user(user_id: str) -> None:
 
 
 def user_exists(user_id: str) -> bool:
+    """Devuelve True si el usuario ya existe en la BD."""
     with get_connection() as conn:
         row = conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
     return row is not None
 
 
 # --- transactions ----------------------------------------------------------
+
 
 def insert_transaction(tx: dict[str, Any]) -> None:
     """Inserta una transaccion ya procesada (anonimizada + clasificada).
@@ -54,6 +58,7 @@ def insert_transaction(tx: dict[str, Any]) -> None:
 
 
 def get_transactions_by_user(user_id: str, limit: int = 500) -> list[dict[str, Any]]:
+    """Devuelve las ultimas `limit` transacciones del usuario, mas recientes primero."""
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -161,7 +166,16 @@ def record_insight_call(
                 (id, user_id, month, source, prompt_tokens, completion_tokens, cost_eur, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (uuid.uuid4().hex, user_id, month, source, prompt_tokens, completion_tokens, cost_eur, _now()),
+            (
+                uuid.uuid4().hex,
+                user_id,
+                month,
+                source,
+                prompt_tokens,
+                completion_tokens,
+                cost_eur,
+                _now(),
+            ),
         )
 
 

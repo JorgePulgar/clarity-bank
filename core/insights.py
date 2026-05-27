@@ -8,6 +8,7 @@ Flujo:
 
 RGPD: nunca se envia PII al LLM; se usan agregados y texto anonimizado.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -67,9 +68,7 @@ def aggregate_month(
 
     top = sorted(gasto_por_cat.items(), key=lambda kv: kv[1], reverse=True)[:3]
     dia_max = max(gasto_por_dia, key=lambda d: gasto_por_dia[d]) if gasto_por_dia else None
-    comercio_top = (
-        max(comercio_count, key=lambda c: comercio_count[c]) if comercio_count else None
-    )
+    comercio_top = max(comercio_count, key=lambda c: comercio_count[c]) if comercio_count else None
 
     variacion_pct: Optional[float] = None
     suscripciones_nuevas: list[str] = []
@@ -108,7 +107,10 @@ def aggregate_month(
 
 
 def _build_prompt(month: str, agg: dict[str, Any]) -> str:
-    tops = ", ".join(f"{t['categoria']} ({t['gasto']:.2f} EUR)" for t in agg["top_categorias"]) or "ninguna"
+    tops = (
+        ", ".join(f"{t['categoria']} ({t['gasto']:.2f} EUR)" for t in agg["top_categorias"])
+        or "ninguna"
+    )
     anom = "; ".join(agg["anomalias"]) if agg["anomalias"] else "ninguna"
     variacion = (
         f"{agg['variacion_gasto_pct']:+.1f}% respecto al mes anterior"
@@ -143,7 +145,9 @@ def _template_insight(month: str, agg: dict[str, Any]) -> str:
     variacion_txt = ""
     if agg.get("variacion_gasto_pct") is not None:
         signo = "aumento" if agg["variacion_gasto_pct"] > 0 else "reduccion"
-        variacion_txt = f", un {signo} del {abs(agg['variacion_gasto_pct']):.1f}% respecto al mes anterior"
+        variacion_txt = (
+            f", un {signo} del {abs(agg['variacion_gasto_pct']):.1f}% respecto al mes anterior"
+        )
 
     frases = [
         f"En {month} registraste {agg['n_transactions']} movimientos: "
@@ -162,9 +166,7 @@ def _template_insight(month: str, agg: dict[str, Any]) -> str:
         frases.append(f"El comercio mas frecuente fue '{agg['comercio_frecuente']}'.")
 
     if agg.get("suscripciones_nuevas"):
-        frases.append(
-            f"Suscripciones nuevas este mes: {', '.join(agg['suscripciones_nuevas'])}."
-        )
+        frases.append(f"Suscripciones nuevas este mes: {', '.join(agg['suscripciones_nuevas'])}.")
     if agg.get("suscripciones_canceladas"):
         frases.append(
             f"Suscripciones que no aparecen este mes: {', '.join(agg['suscripciones_canceladas'])}."

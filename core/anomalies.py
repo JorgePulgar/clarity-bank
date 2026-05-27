@@ -6,23 +6,22 @@ Dos detectores independientes:
 
 Diseno para demo: simple, explicable y defendible oralmente. Sin ML.
 """
+
 from __future__ import annotations
 
 from statistics import mean, pstdev
 
 # Umbrales z-score
-Z_THRESHOLD = 2.5       # |z| > 2.5 -> cola del 1.2% por lado
-MIN_SAMPLES = 5         # minimo de muestras para que z sea fiable
-JUMP_FACTOR = 4.0       # fallback con pocos datos: importe >= 4x maximo historico
+Z_THRESHOLD = 2.5  # |z| > 2.5 -> cola del 1.2% por lado
+MIN_SAMPLES = 5  # minimo de muestras para que z sea fiable
+JUMP_FACTOR = 4.0  # fallback con pocos datos: importe >= 4x maximo historico
 
 # Umbrales suscripcion
-MIN_SUBSCRIPTION_SAMPLES = 3        # pagos previos minimos para activar el detector
+MIN_SUBSCRIPTION_SAMPLES = 3  # pagos previos minimos para activar el detector
 SUBSCRIPTION_CHANGE_THRESHOLD = 0.10  # 10% de desviacion sobre la media
 
 
-def detect_zscore_anomaly(
-    amount: float, category: str, history: list[float]
-) -> tuple[bool, str]:
+def detect_zscore_anomaly(amount: float, category: str, history: list[float]) -> tuple[bool, str]:
     """Detecta anomalia por z-score del importe frente al historico de la categoria.
 
     Con menos de MIN_SAMPLES datos usa un salto sobre el maximo como fallback.
@@ -103,8 +102,6 @@ def detect_subscription_change(
     return False, ""
 
 
-def detect_anomaly(
-    amount: float, category: str, history: list[float]
-) -> tuple[bool, str]:
+def detect_anomaly(amount: float, category: str, history: list[float]) -> tuple[bool, str]:
     """Fachada de compatibilidad hacia detect_zscore_anomaly. Pendiente de eliminar tras F3."""
     return detect_zscore_anomaly(amount, category, history)

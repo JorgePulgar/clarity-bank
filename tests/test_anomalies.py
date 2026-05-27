@@ -1,12 +1,12 @@
 """Tests de los detectores de anomalias con casos sinteticos."""
+
 from __future__ import annotations
 
-import pytest
 
 from core.anomalies import detect_subscription_change, detect_zscore_anomaly
 
-
 # --- detect_zscore_anomaly ------------------------------------------------
+
 
 def test_zscore_sin_historico():
     es_anomalia, _ = detect_zscore_anomaly(50.0, "alimentacion", [])
@@ -63,6 +63,7 @@ def test_zscore_razon_incluye_categoria():
 
 
 # --- detect_subscription_change -------------------------------------------
+
 
 def test_suscripcion_sin_historico():
     es_anomalia, _ = detect_subscription_change("NETFLIX SUSCRIPCION", -13.99, [])

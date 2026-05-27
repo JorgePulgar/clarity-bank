@@ -16,12 +16,14 @@ MIENTRAS NO ESTE LISTO: load() lanza NotImplementedError a proposito. core/class
 captura la excepcion y usa el mock automaticamente. No hace falta tocar nada mas:
 en cuanto este modulo implemente load() devolviendo un callable, el sistema lo usara.
 """
+
 from __future__ import annotations
 
 from typing import Callable
 
 
 def load() -> Callable[[str, float], dict]:
+    """Carga el modelo y devuelve la funcion classify. Lanza NotImplementedError hasta que ML lo implemente."""
     raise NotImplementedError(
         "Clasificador real aun no entregado. core/classify.py usa el mock por defecto."
     )

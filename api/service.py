@@ -5,6 +5,7 @@ Pipeline unico reutilizado por POST /transactions y POST /transactions/import:
 
 Mantener la logica aqui evita duplicarla entre endpoints.
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,12 +13,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from api.db import queries
 from core.anomalies import detect_subscription_change, detect_zscore_anomaly
 from core.anonymization import anonymize
 from core.classify import classify
+
+logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
