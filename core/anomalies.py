@@ -1,23 +1,31 @@
 """Deteccion de anomalias sobre el historico del usuario.
 
-Dos senales, ambas por categoria:
-  1. z-score del importe frente a la media historica de esa categoria.
-  2. importe muy superior al maximo historico (salto brusco) cuando hay pocos datos.
+Dos detectores independientes:
+  1. z-score por categoria: importe estadisticamente atipico para esa categoria.
+  2. cambio de suscripcion: comercio recurrente cuyo importe cambia >10%.
 
-Diseno para demo: simple, explicable y defendible oralmente. No ML.
+Diseno para demo: simple, explicable y defendible oralmente. Sin ML.
 """
 from __future__ import annotations
 
 from statistics import mean, pstdev
 
-# Umbrales (ajustables). z>=3 = cola del 0.1%; suelo de muestras para que z sea fiable.
-Z_THRESHOLD = 3.0
-MIN_SAMPLES = 5
-JUMP_FACTOR = 4.0          # importe >= 4x el maximo historico con pocos datos
+# Umbrales z-score
+Z_THRESHOLD = 2.5       # |z| > 2.5 -> cola del 1.2% por lado
+MIN_SAMPLES = 5         # minimo de muestras para que z sea fiable
+JUMP_FACTOR = 4.0       # fallback con pocos datos: importe >= 4x maximo historico
+
+# Umbrales suscripcion
+MIN_SUBSCRIPTION_SAMPLES = 3        # pagos previos minimos para activar el detector
+SUBSCRIPTION_CHANGE_THRESHOLD = 0.10  # 10% de desviacion sobre la media
 
 
-def detect_anomaly(amount: float, category: str, history: list[float]) -> tuple[bool, str]:
-    """Decide si `amount` es anomalo para `category` dado el historico del usuario.
+def detect_zscore_anomaly(
+    amount: float, category: str, history: list[float]
+) -> tuple[bool, str]:
+    """Detecta anomalia por z-score del importe frente al historico de la categoria.
+
+    Con menos de MIN_SAMPLES datos usa un salto sobre el maximo como fallback.
 
     Args:
         amount: importe de la transaccion nueva.
@@ -30,7 +38,6 @@ def detect_anomaly(amount: float, category: str, history: list[float]) -> tuple[
     magnitude = abs(amount)
     hist = [abs(x) for x in history]
 
-    # Sin historico suficiente -> no podemos afirmar anomalia con z-score.
     if len(hist) < MIN_SAMPLES:
         if hist:
             techo = max(hist)
@@ -45,7 +52,6 @@ def detect_anomaly(amount: float, category: str, history: list[float]) -> tuple[
     sigma = pstdev(hist)
 
     if sigma == 0:
-        # Todos los importes previos identicos: cualquier desviacion clara es anomala.
         if magnitude != mu:
             return True, (
                 f"Importe {magnitude:.2f} difiere del valor constante historico "
@@ -54,9 +60,51 @@ def detect_anomaly(amount: float, category: str, history: list[float]) -> tuple[
         return False, ""
 
     z = (magnitude - mu) / sigma
-    if z >= Z_THRESHOLD:
+    if abs(z) >= Z_THRESHOLD:
         return True, (
             f"Gasto {magnitude:.2f} en '{category}' a {z:.1f} sigma de la media "
             f"({mu:.2f}, desv {sigma:.2f})."
         )
     return False, ""
+
+
+def detect_subscription_change(
+    description: str, amount: float, merchant_history: list[float]
+) -> tuple[bool, str]:
+    """Detecta cambio de importe en comercio recurrente (suscripciones, cuotas fijas).
+
+    Solo activa con MIN_SUBSCRIPTION_SAMPLES o mas pagos previos al mismo comercio.
+    Flagea si el importe actual se desvía mas de SUBSCRIPTION_CHANGE_THRESHOLD de la media.
+
+    Args:
+        description: descripcion anonimizada de la transaccion.
+        amount: importe actual.
+        merchant_history: importes previos del usuario para ese mismo comercio.
+
+    Returns:
+        (is_anomaly, reason). reason="" si no es anomalia.
+    """
+    if len(merchant_history) < MIN_SUBSCRIPTION_SAMPLES:
+        return False, ""
+
+    magnitudes = [abs(x) for x in merchant_history]
+    current = abs(amount)
+    mu = mean(magnitudes)
+
+    if mu == 0:
+        return False, ""
+
+    desviacion = abs(current - mu) / mu
+    if desviacion > SUBSCRIPTION_CHANGE_THRESHOLD:
+        return True, (
+            f"Importe {current:.2f} en '{description}' difiere {desviacion * 100:.0f}% "
+            f"de la media historica del comercio ({mu:.2f})."
+        )
+    return False, ""
+
+
+def detect_anomaly(
+    amount: float, category: str, history: list[float]
+) -> tuple[bool, str]:
+    """Fachada de compatibilidad hacia detect_zscore_anomaly. Pendiente de eliminar tras F3."""
+    return detect_zscore_anomaly(amount, category, history)
