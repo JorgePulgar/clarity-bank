@@ -15,7 +15,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from api.db import queries
-from core.anomalies import detect_anomaly
+from core.anomalies import detect_subscription_change, detect_zscore_anomaly
 from core.anonymization import anonymize
 from core.classify import classify
 
@@ -45,7 +45,11 @@ def process_transaction(
     category = clf["categoria"]
 
     history = queries.get_category_history(user_id, category)
-    is_anomaly, reason = detect_anomaly(amount, category, history)
+    is_anomaly, reason = detect_zscore_anomaly(amount, category, history)
+
+    if not is_anomaly:
+        merchant_history = queries.get_merchant_history(user_id, desc_anon)
+        is_anomaly, reason = detect_subscription_change(desc_anon, amount, merchant_history)
 
     row: dict[str, Any] = {
         "id": uuid.uuid4().hex,

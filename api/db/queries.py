@@ -90,6 +90,16 @@ def get_category_history(user_id: str, category: str) -> list[float]:
     return [r["amount"] for r in rows]
 
 
+def get_merchant_history(user_id: str, description_anonymized: str) -> list[float]:
+    """Importes historicos del usuario para un comercio concreto (match exacto en descripcion anonimizada)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT amount FROM transactions WHERE user_id = ? AND description_anonymized = ?",
+            (user_id, description_anonymized),
+        ).fetchall()
+    return [r["amount"] for r in rows]
+
+
 def get_user_stats(user_id: str) -> dict[str, Any]:
     """Agregados basicos para el dashboard: totales y desglose por categoria."""
     with get_connection() as conn:
