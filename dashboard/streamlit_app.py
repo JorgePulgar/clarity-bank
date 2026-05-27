@@ -31,30 +31,58 @@ API_URL = os.environ.get("CLARITY_API_URL", "http://127.0.0.1:8000")
 st.set_page_config(page_title="ClarityBank Demo", page_icon="*", layout="wide")
 st.title("ClarityBank - Demo")
 
-# Estado de la API en la barra lateral.
+# Sidebar global: conexion, usuario activo, metricas en vivo, reset
 with st.sidebar:
-    st.header("Conexion")
-    st.caption(f"API: {API_URL}")
+    st.title("ClarityBank")
+    st.caption(f"API: `{API_URL}`")
+
+    # Estado de conexion
+    api_ok = False
     try:
-        h = requests.get(f"{API_URL}/health", timeout=3).json()
-        st.success("API conectada")
-        st.json(h)
-    except Exception as e:
-        st.error(f"API no disponible: {e}")
-    st.divider()
-    user_id = st.text_input("user_id", value="user_demo")
-    st.divider()
-    st.header("Panel de Coste")
-    try:
-        cs = requests.get(f"{API_URL}/users/{user_id}/cost-stats", timeout=3).json()
-        c1, c2 = st.columns(2)
-        c1.metric("Transacciones", cs["n_transactions"])
-        c2.metric("Nivel 2 (LLM)", cs["n_llm_calls"])
-        c3, c4 = st.columns(2)
-        c3.metric("Insights", cs["n_insights"])
-        c4.metric("Coste est. EUR", f"{cs['total_cost_eur']:.4f}")
+        h = requests.get(f"{API_URL}/health", timeout=2).json()
+        api_ok = True
+        modo = h.get("classifier_mode", "mock")
+        st.success(f"API conectada — clasificador: {modo}")
     except Exception:
-        st.caption("Sin datos de coste")
+        st.error("API no disponible")
+
+    st.divider()
+
+    # Usuario activo
+    st.subheader("Usuario activo")
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = "demo-user"
+    user_id = st.text_input("user_id", key="user_id")
+
+    st.divider()
+
+    # Metricas en vivo
+    st.subheader("Metricas en vivo")
+    if api_ok:
+        try:
+            cs = requests.get(f"{API_URL}/users/{user_id}/cost-stats", timeout=2).json()
+            n_tx = cs["n_transactions"]
+            n_llm = cs["n_llm_calls"]
+            pct_llm = round(n_llm / n_tx * 100, 1) if n_tx > 0 else 0.0
+            col1, col2 = st.columns(2)
+            col1.metric("Transacciones", n_tx)
+            col2.metric("Escaladas LLM", f"{pct_llm}%")
+            col3, col4 = st.columns(2)
+            col3.metric("Insights", cs["n_insights"])
+            col4.metric("Coste acum.", f"€{cs['total_cost_eur']:.4f}")
+        except Exception:
+            st.caption("Sin datos para este usuario")
+    else:
+        st.caption("Sin conexion a la API")
+
+    st.divider()
+
+    # Reset demo
+    if st.button("Reset demo", help="Limpia el estado de la sesion Streamlit (no borra la BD)"):
+        uid = st.session_state.get("user_id", "demo-user")
+        st.session_state.clear()
+        st.session_state["user_id"] = uid
+        st.rerun()
 
 tab1, tab2, tab3 = st.tabs(["Transaccion individual", "Importar lote", "Insights"])
 
