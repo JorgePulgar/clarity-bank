@@ -218,20 +218,40 @@ with tab2:
             st.error(f"Error al cargar stats: {e}")
 
 
-# --- Pantalla 3: insights --------------------------------------------------
+# --- Pantalla 3: insights mensuales ---------------------------------------
 with tab3:
-    st.subheader("Insight mensual")
-    month = st.text_input("Mes (YYYY-MM)", "2026-04")
-    if st.button("Generar insight"):
+    st.subheader("Insights mensuales")
+    st.caption(
+        "Genera un analisis en lenguaje natural del mes a partir de los datos del usuario. "
+        "Si hay credenciales Azure OpenAI configuradas, usa el LLM; si no, usa una plantilla local."
+    )
+    col_sel, _ = st.columns([1, 2])
+    with col_sel:
+        month = st.text_input("Mes (YYYY-MM)", "2026-04", key="ins_month")
+    if st.button("Generar insight", type="primary", key="btn_insight"):
         try:
-            r = requests.post(
-                f"{API_URL}/insights/generate",
-                json={"user_id": user_id, "month": month},
-                timeout=30,
-            )
-            r.raise_for_status()
-            data = r.json()
-            st.write(data["text"])
-            st.caption(f"Fuente: {data['source']} - {data['n_transactions']} transacciones")
+            with st.spinner("Generando insight mensual..."):
+                r = requests.post(
+                    f"{API_URL}/insights/generate",
+                    json={"user_id": user_id, "month": month},
+                    timeout=30,
+                )
+                r.raise_for_status()
+                data = r.json()
+
+            st.markdown(data["text"])
+            st.divider()
+            coste = data.get("cost_eur_estimate")
+            if coste is not None:
+                st.caption(
+                    f"Fuente: **LLM (Azure gpt-4o-mini)** — "
+                    f"{data['n_transactions']} transacciones — "
+                    f"Coste estimado: **€{coste:.4f}**"
+                )
+            else:
+                st.caption(
+                    f"Fuente: **plantilla local** (sin LLM) — "
+                    f"{data['n_transactions']} transacciones"
+                )
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error al generar insight: {e}")
