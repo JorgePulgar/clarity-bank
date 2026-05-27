@@ -9,5 +9,5 @@ vez, cada tarea = un commit, y se marca `[x]` al cerrarla. Decisiones y errores 
 | 2 | [Anonimizacion RGPD](FASE_2_anonimizacion.md) | COMPLETADA |
 | 3 | [Anomalias + historico](FASE_3_anomalias_historico.md) | COMPLETADA |
 | 4 | [Insights + modelo + coste](FASE_4_insights_modelo_coste.md) | COMPLETADA |
-| 5 | [Dashboard completo](FASE_5_dashboard.md) | PENDIENTE |
+| 5 | [Dashboard completo](FASE_5_dashboard.md) | COMPLETADA |
 | 6 | [E2E + entregables](FASE_6_e2e_entregables.md) | PENDIENTE |
