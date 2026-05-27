@@ -187,6 +187,88 @@ Salida esperada (resumida):
 
 ---
 
+## Prueba manual paso a paso
+
+Con la API arrancada (`uvicorn api.main:app --reload`), ejecutar en orden:
+
+### 1. Verificar que todo esta OK
+
+```bash
+curl http://127.0.0.1:8000/health
+# {"status":"ok","classifier":"mock","anonymization":"regex","insights":"template"}
+```
+
+### 2. Clasificar una transaccion (con y sin PII)
+
+```bash
+# Transaccion limpia -> alimentacion L1 92%
+curl -X POST http://127.0.0.1:8000/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"u1\",\"description\":\"PAGO TARJETA MERCADONA SL MADRID\",\"amount\":-43.27}"
+
+# Transaccion con PII -> ver description_anonymized con <IBAN> <EMAIL>
+curl -X POST http://127.0.0.1:8000/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"u1\",\"description\":\"TRANSFERENCIA ES9121000418450200051332 juan@mail.com\",\"amount\":-200.0}"
+
+# Sin match de palabras clave -> otros L2 40% (caso dificil, escalaria a LLM)
+curl -X POST http://127.0.0.1:8000/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"u1\",\"description\":\"CUOTA ASOCIACION CULTURAL MADRID\",\"amount\":-80.0}"
+```
+
+### 3. Cargar historico e introducir anomalia
+
+```bash
+# Generar 6 meses de datos simulados
+python scripts/generate_history.py --user-id u1 --months 6
+
+# Importar via CSV
+curl -X POST http://127.0.0.1:8000/transactions/import \
+  -F "file=@data/history_u1.csv"
+
+# Ahora enviar un outlier: deberia marcarse is_anomaly=true
+curl -X POST http://127.0.0.1:8000/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"u1\",\"description\":\"AMAZON COMPRA ONLINE\",\"amount\":-1450.0}"
+```
+
+### 4. Consultar estadisticas
+
+```bash
+curl http://127.0.0.1:8000/users/u1/stats
+curl http://127.0.0.1:8000/users/u1/cost-stats
+curl http://127.0.0.1:8000/transactions/u1?limit=5
+```
+
+### 5. Generar insight del mes
+
+```bash
+# Cambiar YYYY-MM al mes actual
+curl -X POST http://127.0.0.1:8000/insights/generate \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"u1\",\"month\":\"2026-05\"}"
+```
+
+### 6. Dashboard interactivo
+
+Con la API levantada, en otra terminal:
+
+```bash
+streamlit run dashboard/streamlit_app.py
+# Abre http://localhost:8501
+```
+
+Pantallas disponibles: clasificar transaccion · importar historico · generar insight.
+
+### 7. Swagger (UI grafica de todos los endpoints)
+
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
 ## Endpoints
 
 | Metodo | Ruta                           | Descripcion                              |
