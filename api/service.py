@@ -7,9 +7,12 @@ Mantener la logica aqui evita duplicarla entre endpoints.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from api.db import queries
 from core.anomalies import detect_anomaly
@@ -35,7 +38,9 @@ def process_transaction(
     """
     queries.ensure_user(user_id)
 
-    desc_anon, _entities = anonymize(description)
+    desc_anon, entities = anonymize(description)
+    if entities:
+        logger.info("anonimizacion user=%s entidades=%s", user_id, entities)
     clf = classify(desc_anon, amount)
     category = clf["categoria"]
 

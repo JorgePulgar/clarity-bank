@@ -12,12 +12,12 @@ persiste crudo en campos anonimizados ni sale al LLM.
 
 - [x] `core/anonymization.py` con regex base + Presidio opcional (degrada a regex).
 - [x] Anonimizacion integrada en el pipeline antes de clasificar/guardar.
-- [ ] Cambiar firma a `anonymize(text) -> tuple[str, dict]` devolviendo tambien el dict de
-      entidades detectadas (tipo → nº ocurrencias), sin exponer el valor original.
-- [ ] Regex para nombres de persona tras marcadores: `BIZUM DE`, `TRANSFERENCIA DE`,
-      `TRANSFERENCIA A` → sustituir el nombre por `<PERSONA>`.
-- [ ] Regex para cuentas parcialmente enmascaradas (`*****1234`) → `<CUENTA>`.
-- [ ] Logging por request de **que** se anonimizo (tipos y conteos), nunca el dato original.
+- [x] Cambiar firma a `anonymize(text) -> tuple[str, dict]` devolviendo tambien el dict de
+      entidades detectadas (tipo → nº ocurrencias), sin exponer el valor original. (c80ae22)
+- [x] Regex para nombres de persona tras marcadores: `BIZUM DE`, `TRANSFERENCIA DE`,
+      `TRANSFERENCIA A` → sustituir el nombre por `<PERSONA>`. (c80ae22)
+- [x] Regex para cuentas parcialmente enmascaradas (`*****1234`) → `<CUENTA>`. (c80ae22)
+- [x] Logging por request de **que** se anonimizo (tipos y conteos), nunca el dato original.
 - [ ] Suite de tests con ≥10 casos representativos (BIZUM DE nombre, IBAN, DNI, email,
       telefono, cuenta enmascarada, texto sin PII, idempotencia, etc.).
 
