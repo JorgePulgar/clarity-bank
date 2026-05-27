@@ -9,6 +9,7 @@ Arrancar (con la API ya levantada):
 from __future__ import annotations
 
 import os
+import time
 
 import pandas as pd
 import requests
@@ -50,31 +51,56 @@ tab1, tab2, tab3 = st.tabs(["Transaccion individual", "Importar lote", "Insights
 # --- Pantalla 1: transaccion individual -----------------------------------
 with tab1:
     st.subheader("Clasificar una transaccion")
+    st.caption("Introduce un movimiento bancario para ver como lo clasifica el sistema.")
     with st.form("tx_form"):
-        desc = st.text_input("Descripcion", "PAGO TARJETA MERCADONA SL MADRID")
-        amount = st.number_input("Importe (EUR)", value=-43.27, step=1.0,
-                                  help="Negativo = gasto, positivo = ingreso")
-        submitted = st.form_submit_button("Enviar")
+        desc = st.text_input("Descripcion del movimiento", "PAGO TARJETA MERCADONA SL MADRID")
+        amount = st.number_input(
+            "Importe (EUR)", value=-43.27, step=1.0,
+            help="Negativo = gasto, positivo = ingreso",
+        )
+        submitted = st.form_submit_button("Clasificar", type="primary")
+
     if submitted:
+        t0 = time.time()
         try:
             r = requests.post(
                 f"{API_URL}/transactions",
                 json={"user_id": user_id, "description": desc, "amount": amount},
                 timeout=10,
             )
+            latencia_ms = int((time.time() - t0) * 1000)
             r.raise_for_status()
             data = r.json()
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Categoria", data["category"])
-            c2.metric("Confianza", f"{data['confidence']:.0%}")
-            c3.metric("Nivel", f"L{data['classification_level']}")
-            st.caption(f"Anonimizado: {data['description_anonymized']}")
+
+            # Cards de resultado
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Categoria", data["category"].capitalize())
+            confianza = data["confidence"]
+            c2.metric("Confianza", f"{confianza:.0%}")
+            nivel_txt = "L1 — Local" if data["classification_level"] == 1 else "L2 — LLM"
+            c3.metric("Nivel usado", nivel_txt)
+            c4.metric("Latencia", f"{latencia_ms} ms")
+
+            st.progress(confianza, text=f"Confianza del clasificador: {confianza:.0%}")
+
+            # Flag de anomalia
             if data["is_anomaly"]:
-                st.warning(f"Anomalia: {data['anomaly_reason']}")
+                st.error(f"Anomalia detectada: {data['anomaly_reason']}")
             else:
-                st.info("Sin anomalias.")
+                st.success("Sin anomalias detectadas")
+
+            # Descripcion original vs anonimizada lado a lado
+            st.divider()
+            col_orig, col_anon = st.columns(2)
+            with col_orig:
+                st.caption("Descripcion original")
+                st.code(data.get("description_raw") or desc, language=None)
+            with col_anon:
+                st.caption("Descripcion anonimizada (lo que ve el clasificador)")
+                st.code(data.get("description_anonymized") or desc, language=None)
+
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error al clasificar: {e}")
 
 
 # --- Pantalla 2: importar lote --------------------------------------------
