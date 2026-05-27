@@ -109,3 +109,52 @@ def test_generate_insight(client):
     data = r.json()
     assert data["source"] in ("llm", "template")
     assert data["text"]
+
+
+def test_import_json(client):
+    payload = [
+        {"user_id": USER, "description": "REPSOL GASOLINERA", "amount": -55.0},
+        {"user_id": USER, "description": "ABONO NOMINA", "amount": 1500.0},
+    ]
+    r = client.post(
+        "/transactions/import",
+        files={
+            "file": (
+                "batch.json",
+                io.BytesIO(str(payload).replace("'", '"').encode()),
+                "application/json",
+            )
+        },
+    )
+    assert r.status_code == 200
+    res = r.json()
+    assert res["received"] == 2
+    assert res["processed"] == 2
+
+
+def test_cost_stats(client):
+    client.post(
+        "/transactions",
+        json={"user_id": USER, "description": "LIDL SUPERMERCADOS", "amount": -22.5},
+    )
+    r = client.get(f"/users/{USER}/cost-stats")
+    assert r.status_code == 200
+    data = r.json()
+    assert "n_transactions" in data
+    assert "n_llm_calls" in data
+    assert data["n_transactions"] >= 1
+
+
+def test_anomaly_detected_after_history(client):
+    """Despues de cargar historico normal, un outlier debe marcarse como anomalia."""
+    csv_data = "user_id,description,amount\n" + (f"{USER},AMAZON COMPRA ONLINE,-30.0\n" * 10)
+    client.post(
+        "/transactions/import",
+        files={"file": ("hist.csv", io.BytesIO(csv_data.encode()), "text/csv")},
+    )
+    r = client.post(
+        "/transactions",
+        json={"user_id": USER, "description": "AMAZON COMPRA ONLINE", "amount": -1450.0},
+    )
+    assert r.status_code == 201
+    assert r.json()["is_anomaly"] is True
