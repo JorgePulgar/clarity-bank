@@ -27,7 +27,7 @@ def load():
     artifact  = joblib.load(MODELS_DIR / "classifier.pkl")
     model     = artifact["model"]
     le        = artifact["label_encoder"]
-    threshold = 0.70
+    threshold = artifact["threshold"]
     embedder  = SentenceTransformer(artifact["embedder_name"])
 
     def classify(description: str, amount: float) -> dict:
@@ -45,7 +45,8 @@ def load():
             return {"categoria": cat, "confianza": round(conf, 4), "nivel_usado": 1}
         try:
             cat_llm = _call_llm(description, amount)
-            return {"categoria": cat_llm, "confianza": 0.0, "nivel_usado": 2}
+            # conf es el score L1 antes de escalar; el LLM no produce probabilidades calibradas.
+            return {"categoria": cat_llm, "confianza": round(conf, 4), "nivel_usado": 2}
         except Exception:
             return {"categoria": cat, "confianza": round(conf, 4), "nivel_usado": 1}
 
