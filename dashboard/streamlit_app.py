@@ -91,29 +91,30 @@ with st.sidebar:
         st.session_state["user_id"] = uid
         st.rerun()
 
-# Pool ordenado narrativamente para la simulacion de stream.
-# Los primeros son transacciones claras, luego aparecen outliers y casos LLM.
+# Pool ordenado para la simulacion de stream.
+# Outliers en posiciones 5, 9 y 16 — visibles con n_stream >= 10.
+# Requieren historico previo para que el z-score tenga baseline.
 _STREAM_POOL: list[tuple[str, float]] = [
-    ("PAGO TARJETA MERCADONA SL MADRID", -43.27),
-    ("NETFLIX SUSCRIPCION MENSUAL", -12.99),
-    ("UBER TRIP MADRID", -18.50),
-    ("GLOVO PEDIDO COMIDA", -24.80),
-    ("FARMACIA CENTRAL MADRID", -22.10),
-    ("ABONO NOMINA EMPRESA SL MADRID", 2000.00),
-    ("SPOTIFY PREMIUM", -10.99),
-    ("RENFE CERCANIAS BILLETE", -4.50),
-    ("AMAZON COMPRA ONLINE", -85.40),
-    ("REINTEGRO CONCEPTOS VARIOS CUENTA", 150.00),   # ambigua → LLM
-    ("TRANSFERENCIA ALQUILER PISO MADRID", -750.00),
-    ("AMAZON COMPRA ONLINE", -1450.00),               # outlier → anomalia
-    ("CARREFOUR EXPRESS MADRID", -38.90),
-    ("CUOTA ASOCIACION CULTURAL MADRID", -80.00),     # ambigua → LLM
-    ("BAR LA ESQUINA MADRID", -14.60),
-    ("IBERDROLA FACTURA LUZ OCTUBRE", -78.30),
-    ("RESTAURANTE EL CELLER DE CAN ROCA", -380.00),   # outlier → anomalia
-    ("ZARA TIENDA MADRID", -64.00),
-    ("TRANSFERENCIA BIZUM VARIOS", -950.00),           # outlier → anomalia
-    ("MOVISTAR FACTURA FIBRA", -49.99),
+    ("PAGO TARJETA MERCADONA SL MADRID", -43.27),      # 1  alimentacion normal
+    ("NETFLIX SUSCRIPCION MENSUAL", -12.99),            # 2  suscripciones normal
+    ("UBER TRIP MADRID", -18.50),                       # 3  transporte normal
+    ("GLOVO PEDIDO COMIDA", -24.80),                    # 4  restauracion normal
+    ("AMAZON COMPRA ONLINE", -1450.00),                 # 5  compras — ANOMALIA
+    ("FARMACIA CENTRAL MADRID", -22.10),                # 6  salud normal
+    ("ABONO NOMINA EMPRESA SL MADRID", 2000.00),        # 7  ingresos normal
+    ("SPOTIFY PREMIUM", -10.99),                        # 8  suscripciones normal
+    ("RESTAURANTE EL CELLER DE CAN ROCA", -380.00),     # 9  restauracion — ANOMALIA
+    ("REINTEGRO CONCEPTOS VARIOS CUENTA", 150.00),      # 10 ambigua
+    ("TRANSFERENCIA ALQUILER PISO MADRID", -750.00),    # 11 hogar normal
+    ("AMAZON COMPRA ONLINE", -85.40),                   # 12 compras normal
+    ("CUOTA ASOCIACION CULTURAL MADRID", -80.00),       # 13 ambigua
+    ("BAR LA ESQUINA MADRID", -14.60),                  # 14 restauracion normal
+    ("IBERDROLA FACTURA LUZ OCTUBRE", -78.30),          # 15 hogar normal
+    ("TRANSFERENCIA BIZUM VARIOS", -950.00),            # 16 transferencias — ANOMALIA
+    ("CARREFOUR EXPRESS MADRID", -38.90),               # 17 alimentacion normal
+    ("ZARA TIENDA MADRID", -64.00),                     # 18 compras normal
+    ("RENFE CERCANIAS BILLETE", -4.50),                 # 19 transporte normal
+    ("MOVISTAR FACTURA FIBRA", -49.99),                 # 20 suscripciones normal
 ]
 
 tab1, tab2, tab3, tab4 = st.tabs(
@@ -376,7 +377,7 @@ with tab4:
         "clasificacion (L1/L2) → deteccion de anomalias."
     )
 
-    col_v, col_n, col_info = st.columns([1, 1, 2])
+    col_v, col_n, col_hist = st.columns([1, 1, 1])
     velocidad = col_v.slider(
         "Intervalo (s)",
         min_value=0.3,
@@ -390,13 +391,23 @@ with tab4:
         "Num. transacciones",
         min_value=5,
         max_value=len(_STREAM_POOL),
-        value=12,
+        value=10,
         key="stream_n",
     )
-    col_info.info(
-        f"Se procesaran {n_stream} transacciones con {velocidad}s de intervalo "
-        f"(~{n_stream * velocidad:.0f}s total). "
-        "Los outliers aparecen a partir de la transaccion 10."
+    gen_historico_previo = col_hist.checkbox(
+        "Generar historico previo",
+        value=True,
+        key="stream_gen_hist",
+        help="Importa 6 meses de historico antes de la simulacion. "
+             "Necesario para que el z-score tenga baseline y detecte anomalias.",
+    )
+
+    n_anom_pool = sum(1 for _, amt in _STREAM_POOL[:n_stream] if amt in (-1450.0, -380.0, -950.0))
+    st.info(
+        f"{n_stream} transacciones · intervalo {velocidad}s · "
+        f"~{n_stream * velocidad:.0f}s total · "
+        f"{n_anom_pool} outlier(s) en este rango"
+        + (" · historico previo: SI" if gen_historico_previo else " · historico previo: NO → anomalias no detectables")
     )
 
     iniciar = st.button(
@@ -410,6 +421,31 @@ with tab4:
 
     if iniciar:
         txs_a_procesar = _STREAM_POOL[:n_stream]
+
+        if gen_historico_previo:
+            with st.spinner("Generando historico previo (6 meses)..."):
+                try:
+                    import io as _io
+                    import csv as _csv
+                    random.seed(42)
+                    rows_hist = _gen_historico(
+                        user=user_id, months=6, per_month=20,
+                        salary=2000.0, ciudad="MADRID", n_suscripciones=3,
+                    )
+                    buf = _io.StringIO()
+                    w = _csv.DictWriter(buf, fieldnames=["user_id", "description", "amount", "date"])
+                    w.writeheader()
+                    w.writerows(rows_hist)
+                    rh = requests.post(
+                        f"{API_URL}/transactions/import",
+                        files={"file": ("hist.csv", buf.getvalue().encode("utf-8"), "text/csv")},
+                        timeout=120,
+                    )
+                    rh.raise_for_status()
+                    res_h = rh.json()
+                    st.success(f"Historico listo: {res_h['processed']} transacciones importadas.")
+                except Exception as e:
+                    st.warning(f"Historico no importado: {e}. Las anomalias pueden no detectarse.")
 
         ph_estado = st.empty()
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
