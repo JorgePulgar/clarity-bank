@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import io
 
 USER = "user_test"
@@ -158,3 +159,59 @@ def test_anomaly_detected_after_history(client):
     )
     assert r.status_code == 201
     assert r.json()["is_anomaly"] is True
+
+
+def test_import_idempotente_no_duplica_transacciones(client):
+    """Importar el mismo CSV dos veces no duplica transacciones ni anomalias.
+
+    Usa fechas fijas en el CSV para que description_raw+amount+created_at sean identicos
+    en ambas importaciones y el indice unico las descarte silenciosamente.
+    """
+    user = "user_dedup_test"
+    # 11 transacciones normales para que z-score tenga baseline suficiente (MIN_SAMPLES=10)
+    filas_normales = [
+        {
+            "user_id": user,
+            "description": "MERCADONA MADRID",
+            "amount": -30.0,
+            "date": f"2026-01-{d:02d}T12:00:00",
+        }
+        for d in range(1, 12)
+    ]
+    outlier = {
+        "user_id": user,
+        "description": "MERCADONA MADRID",
+        "amount": -820.0,
+        "date": "2026-01-12T12:00:00",
+    }
+    filas = filas_normales + [outlier]
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=["user_id", "description", "amount", "date"])
+    writer.writeheader()
+    writer.writerows(filas)
+    csv_bytes = buf.getvalue().encode("utf-8")
+
+    # Primer import
+    r1 = client.post(
+        "/transactions/import",
+        files={"file": ("hist.csv", io.BytesIO(csv_bytes), "text/csv")},
+    )
+    assert r1.status_code == 200
+    n_anomalias_primera = r1.json()["anomalies"]
+
+    # Segundo import — mismo CSV, mismas fechas → debe ignorar duplicados
+    r2 = client.post(
+        "/transactions/import",
+        files={"file": ("hist.csv", io.BytesIO(csv_bytes), "text/csv")},
+    )
+    assert r2.status_code == 200
+
+    txs = client.get(f"/transactions/{user}").json()
+    assert len(txs) == len(filas), (
+        f"Se esperaban {len(filas)} transacciones pero hay {len(txs)}: el import duplico filas"
+    )
+    n_anomalias_total = sum(1 for t in txs if t["is_anomaly"])
+    assert n_anomalias_total == n_anomalias_primera, (
+        f"Las anomalias se duplicaron: {n_anomalias_total} != {n_anomalias_primera}"
+    )

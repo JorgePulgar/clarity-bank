@@ -43,7 +43,7 @@ def insert_transaction(tx: dict[str, Any]) -> None:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO transactions (
+            INSERT OR IGNORE INTO transactions (
                 id, user_id, description_raw, description_anonymized,
                 amount, category, confidence, classification_level,
                 is_anomaly, anomaly_reason, created_at

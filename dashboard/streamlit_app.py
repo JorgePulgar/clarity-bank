@@ -13,6 +13,7 @@ import csv
 import io
 import os
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,53 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.generate_history import generate as _gen_historico  # noqa: E402
 
 API_URL = os.environ.get("CLARITY_API_URL", "http://127.0.0.1:8000")
+
+# Categorias que no son gasto de consumo (se excluyen del grafico principal)
+_CATS_EXCLUIR_GRAFICO: set[str] = {"ingresos", "transferencias"}
+
+# Regex para extraer el valor sigma de un texto de razon de anomalia
+_SIGMA_RE = re.compile(r"(-?[\d]+\.[\d]+) sigma")
+
+
+def _fmt_eur(amount: float) -> str:
+    """Formatea un importe en euros con separadores espanoles: 1.234,56 €"""
+    formatted = f"{abs(amount):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    sign = "−" if amount < 0 else ""
+    return f"{sign}{formatted} €"
+
+
+def _sigma_de_razon(reason: str) -> float | None:
+    """Extrae el valor absoluto de sigma de un texto de razon de anomalia."""
+    m = _SIGMA_RE.search(reason)
+    return abs(float(m.group(1))) if m else None
+
+
+def _cap_sigma_texto(reason: str) -> str:
+    """Reemplaza valores sigma > 5 con '>5σ' para evitar cifras irreales en la UI."""
+    def _repl(m: re.Match) -> str:
+        return ">5σ" if abs(float(m.group(1))) > 5.0 else m.group(0)
+    return _SIGMA_RE.sub(_repl, reason)
+
+
+def _mostrar_anomalia(texto_completo: str) -> None:
+    """Muestra tarjeta de anomalia con color segun severidad del z-score.
+
+    - z > 5  → rojo (grave)
+    - z 3.5–5 → naranja (media)
+    - z < 3.5 o sin sigma → amarillo (leve / otro tipo de anomalia)
+    """
+    z = _sigma_de_razon(texto_completo)
+    texto = _cap_sigma_texto(texto_completo)
+    if z is not None and z > 5.0:
+        st.error(texto, icon=None)
+    elif z is not None and z > 3.5:
+        st.markdown(
+            f'<div style="background:#7C3209;color:#FFD0A0;padding:8px 12px;'
+            f'border-radius:4px;margin-bottom:4px;font-size:0.85rem;">🟠 {texto}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning(texto, icon=None)
 
 st.set_page_config(
     page_title="ClarityBank — Categorizacion de transacciones",
@@ -286,41 +334,86 @@ with tab2:
     if st.button("Actualizar resumen", key="btn_stats"):
         try:
             s = requests.get(f"{API_URL}/users/{user_id}/stats", timeout=10).json()
-            c1, c2, c3, c4 = st.columns(4)
+
+            # Metricas principales — columnas mas anchas para cifras monetarias
+            c1, c2, c3, c4 = st.columns([1, 1.8, 1.8, 1])
             c1.metric("Transacciones", s["n_transactions"])
-            c2.metric("Gastos totales", f"{s['total_gastos']:.2f} EUR")
-            c3.metric("Ingresos totales", f"{s['total_ingresos']:.2f} EUR")
+            c2.metric("Gastos totales", _fmt_eur(s["total_gastos"]))
+            c3.metric("Ingresos totales", _fmt_eur(s["total_ingresos"]))
             c4.metric("Anomalias", s["n_anomalies"])
+
             if s["by_category"]:
                 df = pd.DataFrame(s["by_category"])
-                df_gastos = df[df["total"] < 0].copy()
-                df_gastos["total"] = df_gastos["total"].abs()
-                if not df_gastos.empty:
+
+                # Gasto de consumo: solo categorias negativas excluyendo ingresos/transferencias
+                df_consumo = df[
+                    (df["total"] < 0) & (~df["category"].isin(_CATS_EXCLUIR_GRAFICO))
+                ].copy()
+                df_consumo["total"] = df_consumo["total"].abs()
+                df_consumo = df_consumo.sort_values("total", ascending=False)
+
+                if not df_consumo.empty:
+                    st.markdown("**Gasto de consumo por categoria**")
                     st.bar_chart(
-                        df_gastos.set_index("category")["total"],
+                        df_consumo.set_index("category")["total"],
                         use_container_width=True,
                     )
-                # Tabla completa + lista de anomalias
+
+                # Ingresos y transferencias como metricas separadas
+                row_ing = df[df["category"] == "ingresos"]
+                row_tra = df[df["category"] == "transferencias"]
+                if not row_ing.empty or not row_tra.empty:
+                    ci, ct = st.columns(2)
+                    if not row_ing.empty:
+                        ci.info(
+                            f"Ingresos: **{_fmt_eur(row_ing.iloc[0]['total'])}** "
+                            f"({row_ing.iloc[0]['n']} transacciones)"
+                        )
+                    if not row_tra.empty:
+                        ct.info(
+                            f"Transferencias: **{_fmt_eur(abs(row_tra.iloc[0]['total']))}** "
+                            f"({row_tra.iloc[0]['n']} transacciones)"
+                        )
+
+                # Tabla categorias con columna % del gasto de consumo
                 col_tabla, col_anom = st.columns([2, 1])
                 with col_tabla:
+                    total_consumo = df_consumo["total"].sum() if not df_consumo.empty else 0.0
+
+                    def _pct_gasto(row: pd.Series) -> str:
+                        if row["category"] in _CATS_EXCLUIR_GRAFICO or row["total"] >= 0:
+                            return "—"
+                        if total_consumo == 0:
+                            return "—"
+                        return (
+                            f"{abs(row['total']) / total_consumo * 100:.1f} %"
+                            .replace(".", ",")
+                        )
+
+                    df_tabla = df.copy()
+                    df_tabla["importe"] = df_tabla["total"].apply(_fmt_eur)
+                    df_tabla["% gasto"] = df_tabla.apply(_pct_gasto, axis=1)
+                    df_tabla = df_tabla.sort_values("total")  # mas negativo (mayor gasto) primero
                     st.dataframe(
-                        df.rename(
-                            columns={
-                                "category": "Categoria",
-                                "n": "N",
-                                "total": "Total EUR",
-                            }
+                        df_tabla[["category", "n", "importe", "% gasto"]].rename(
+                            columns={"category": "Categoria", "n": "N", "importe": "Importe"}
                         ),
                         use_container_width=True,
+                        hide_index=True,
                     )
+
                 with col_anom:
                     st.caption("Anomalias recientes")
                     try:
-                        txs = requests.get(f"{API_URL}/transactions/{user_id}", timeout=10).json()
+                        txs = requests.get(
+                            f"{API_URL}/transactions/{user_id}", timeout=10
+                        ).json()
                         anomalias = [t for t in txs if t.get("is_anomaly")][:10]
                         if anomalias:
                             for a in anomalias:
-                                st.warning(f"{a['category']}: {a['anomaly_reason']}", icon=None)
+                                _mostrar_anomalia(
+                                    f"{a['category']}: {a['anomaly_reason']}"
+                                )
                         else:
                             st.info("Sin anomalias registradas.")
                     except Exception:

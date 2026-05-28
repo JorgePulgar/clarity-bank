@@ -35,6 +35,11 @@ CREATE INDEX IF NOT EXISTS idx_tx_user   ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date   ON transactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_tx_cat    ON transactions(category);
 
+-- Evita insertar la misma transaccion dos veces (mismo usuario, descripcion, importe y fecha).
+-- Permite importar el mismo CSV varias veces sin duplicar datos.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_dedup
+    ON transactions(user_id, description_raw, amount, created_at);
+
 CREATE TABLE IF NOT EXISTS insight_calls (
     id                TEXT PRIMARY KEY,
     user_id           TEXT NOT NULL REFERENCES users(id),

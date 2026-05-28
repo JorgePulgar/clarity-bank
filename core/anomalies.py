@@ -9,7 +9,7 @@ Diseno para demo: simple, explicable y defendible oralmente. Sin ML.
 
 from __future__ import annotations
 
-from statistics import mean, pstdev
+from statistics import mean, stdev
 
 # Umbrales z-score
 Z_THRESHOLD = 3.0  # |z| > 3.0 -> regla 3-sigma, cola del 0.13% por lado
@@ -48,7 +48,7 @@ def detect_zscore_anomaly(amount: float, category: str, history: list[float]) ->
         return False, ""
 
     mu = mean(hist)
-    sigma = pstdev(hist)
+    sigma = stdev(hist)
 
     if sigma == 0:
         if magnitude != mu:

@@ -34,8 +34,8 @@ def test_zscore_normal_dentro_de_banda():
 
 
 def test_zscore_outlier_alto():
-    """Importe muy por encima de la media -> anomalia."""
-    historico = [25.0, 35.0, 30.0, 28.0, 32.0, 27.0, 33.0]
+    """Importe muy por encima de la media -> anomalia (requiere >= MIN_SAMPLES=10 para z-score)."""
+    historico = [25.0, 35.0, 30.0, 28.0, 32.0, 27.0, 33.0, 29.0, 31.0, 26.0]
     es_anomalia, razon = detect_zscore_anomaly(500.0, "alimentacion", historico)
     assert es_anomalia
     assert "sigma" in razon
@@ -43,14 +43,14 @@ def test_zscore_outlier_alto():
 
 def test_zscore_sigma_cero_importe_igual():
     """Todos iguales y nuevo importe igual -> no es anomalia."""
-    historico = [50.0] * 6
+    historico = [50.0] * 10
     es_anomalia, _ = detect_zscore_anomaly(50.0, "suscripciones", historico)
     assert not es_anomalia
 
 
 def test_zscore_sigma_cero_importe_distinto():
-    """Todos iguales pero nuevo importe diferente -> anomalia."""
-    historico = [50.0] * 6
+    """Todos iguales pero nuevo importe diferente -> anomalia (sigma=0 path)."""
+    historico = [50.0] * 10
     es_anomalia, razon = detect_zscore_anomaly(80.0, "suscripciones", historico)
     assert es_anomalia
     assert "constante historico" in razon
