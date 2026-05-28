@@ -342,6 +342,26 @@ with tab2:
             c3.metric("Ingresos totales", _fmt_eur(s["total_ingresos"]))
             c4.metric("Anomalias", s["n_anomalies"])
 
+            # Fetch transacciones una vez — reutilizado por anomalias, grafico y top comercios
+            try:
+                txs_raw = requests.get(
+                    f"{API_URL}/transactions/{user_id}", timeout=10
+                ).json()
+            except Exception:
+                txs_raw = []
+
+            # DataFrame base para analisis temporal y top comercios
+            df_txs = pd.DataFrame(txs_raw) if txs_raw else pd.DataFrame()
+            if not df_txs.empty:
+                df_txs["created_at"] = pd.to_datetime(df_txs["created_at"])
+                df_txs["mes"] = df_txs["created_at"].dt.strftime("%Y-%m")
+                df_txs_consumo = df_txs[
+                    (df_txs["amount"] < 0) & (~df_txs["category"].isin(_CATS_EXCLUIR_GRAFICO))
+                ].copy()
+                df_txs_consumo["gasto"] = df_txs_consumo["amount"].abs()
+            else:
+                df_txs_consumo = pd.DataFrame()
+
             if s["by_category"]:
                 df = pd.DataFrame(s["by_category"])
 
@@ -404,20 +424,46 @@ with tab2:
 
                 with col_anom:
                     st.caption("Anomalias recientes")
-                    try:
-                        txs = requests.get(
-                            f"{API_URL}/transactions/{user_id}", timeout=10
-                        ).json()
-                        anomalias = [t for t in txs if t.get("is_anomaly")][:10]
-                        if anomalias:
-                            for a in anomalias:
-                                _mostrar_anomalia(
-                                    f"{a['category']}: {a['anomaly_reason']}"
-                                )
-                        else:
-                            st.info("Sin anomalias registradas.")
-                    except Exception:
-                        st.caption("No se pudieron cargar anomalias.")
+                    anomalias = [t for t in txs_raw if t.get("is_anomaly")][:10]
+                    if anomalias:
+                        for a in anomalias:
+                            _mostrar_anomalia(
+                                f"{a['category']}: {a['anomaly_reason']}"
+                            )
+                    else:
+                        st.info("Sin anomalias registradas.")
+
+            # --- Bloque 3.1: Evolucion mensual del gasto ---
+            if not df_txs_consumo.empty:
+                st.divider()
+                st.markdown("**Evolucion mensual del gasto de consumo**")
+                df_mensual = (
+                    df_txs_consumo.groupby("mes")["gasto"]
+                    .sum()
+                    .reset_index()
+                    .sort_values("mes")
+                    .rename(columns={"mes": "Mes", "gasto": "Gasto (€)"})
+                )
+                st.line_chart(df_mensual.set_index("Mes"), use_container_width=True)
+
+            # --- Bloque 3.2: Top 5 comercios por gasto ---
+            if not df_txs_consumo.empty:
+                st.divider()
+                st.markdown("**Top 5 comercios por gasto**")
+                df_top = (
+                    df_txs_consumo.groupby("description_raw")
+                    .agg(Transacciones=("gasto", "count"), Gasto=("gasto", "sum"))
+                    .reset_index()
+                    .nlargest(5, "Gasto")
+                )
+                df_top["Comercio"] = df_top["description_raw"].str[:45]
+                df_top["Gasto"] = df_top["Gasto"].apply(_fmt_eur)
+                st.dataframe(
+                    df_top[["Comercio", "Transacciones", "Gasto"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
         except Exception as e:
             st.error(f"Error al cargar stats: {e}")
 
