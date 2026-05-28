@@ -27,7 +27,7 @@ def load():
     artifact  = joblib.load(MODELS_DIR / "classifier.pkl")
     model     = artifact["model"]
     le        = artifact["label_encoder"]
-    threshold = artifact["threshold"]
+    threshold = 0.70
     embedder  = SentenceTransformer(artifact["embedder_name"])
 
     def classify(description: str, amount: float) -> dict:
