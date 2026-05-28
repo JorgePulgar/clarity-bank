@@ -156,6 +156,11 @@ def classify(description: str, amount: float) -> dict:
         dict con claves: categoria (str), confianza (float 0-1), nivel_usado (int 1|2).
         La categoria siempre pertenece a CATEGORIAS; si el modelo devuelve algo
         fuera de la lista, se normaliza a 'otros'.
+
+    Contrato de confianza: `confianza` es SIEMPRE el score del clasificador L1,
+    incluso cuando nivel_usado=2. Es el valor que justifica la escalada al LLM
+    (estaba por debajo del umbral). El LLM no produce probabilidades calibradas,
+    asi que usar su output como confianza no tendria sentido.
     """
     fn = _classifier or _mock_classify
     result = fn(description, amount)

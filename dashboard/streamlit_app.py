@@ -156,8 +156,22 @@ with tab1:
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Categoria", data["category"].capitalize())
             confianza = data["confidence"]
-            c2.metric("Confianza", f"{confianza:.0%}")
-            nivel_txt = "L1 — Local" if data["classification_level"] == 1 else "L2 — LLM"
+            nivel = data["classification_level"]
+            if nivel == 2 and confianza > 0:
+                c2.metric(
+                    "Confianza L1",
+                    f"{confianza:.0%}",
+                    help="Score del clasificador local antes de escalar al LLM. Por debajo del umbral → se uso LLM.",
+                )
+            elif nivel == 2:
+                c2.metric(
+                    "Confianza L1",
+                    "—",
+                    help="El clasificador local escalo al LLM pero no reporto su score.",
+                )
+            else:
+                c2.metric("Confianza", f"{confianza:.0%}")
+            nivel_txt = "L1 — Local" if nivel == 1 else "L2 — LLM"
             c3.metric("Nivel usado", nivel_txt)
             c4.metric("Latencia", f"{latencia_ms} ms")
 
@@ -422,13 +436,19 @@ with tab4:
                 tx = resp.json()
 
                 anon = tx.get("description_anonymized") or desc
-                nivel = "L2 LLM" if tx["classification_level"] == 2 else "L1 local"
+                nivel_num = tx["classification_level"]
+                nivel = "L2 LLM" if nivel_num == 2 else "L1 local"
+                conf = tx["confidence"]
+                if nivel_num == 2:
+                    conf_txt = f"{conf:.0%} L1" if conf > 0 else "— L1"
+                else:
+                    conf_txt = f"{conf:.0%}"
                 filas.append(
                     {
                         "Descripcion": desc[:42] + "…" if len(desc) > 42 else desc,
                         "Anonimizada": anon[:42] + "…" if len(anon) > 42 else anon,
                         "Categoria": tx["category"],
-                        "Confianza": f"{tx['confidence']:.0%}",
+                        "Confianza": conf_txt,
                         "Nivel": nivel,
                         "Importe": f"{amount:+.2f}",
                         "Anomalia": "SI" if tx["is_anomaly"] else "—",
