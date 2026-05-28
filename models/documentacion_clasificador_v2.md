@@ -2,8 +2,9 @@
 
 <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
 <img src="https://img.shields.io/badge/LightGBM-Ganador-4CAF50?style=for-the-badge"/>
-<img src="https://img.shields.io/badge/Precisión-96.6%25-1D9E75?style=for-the-badge"/>
-<img src="https://img.shields.io/badge/Latencia-16.8ms-378ADD?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Precisión_L1-91.2%25-1D9E75?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Precisión_L1%2BL2-96.1%25-1D9E75?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Latencia-55.5ms-378ADD?style=for-the-badge"/>
 
 # 🏦 Clasificador de Transacciones Bancarias
 
@@ -51,7 +52,7 @@ Transacción entrante
 ┌───────────────────┐                          ┌─────────────────┐
 │  Nivel 2          │ ──────────────────────► │  Resultado      │
 │  LLM externo      │                          │  categoria: X   │
-│  (Azure OpenAI)   │                          │  confianza: 0.0 │
+│  (Azure OpenAI)   │                          │  confianza: 0.XX│  ← score L1 antes de escalar
 └───────────────────┘                          │  nivel_usado: 2 │
                                                └─────────────────┘
 ```
@@ -66,10 +67,11 @@ Transacción entrante
 
 | Métrica | Valor | Descripción |
 |:-------:|:-----:|:------------|
-| 🎯 **Precisión global** | **96.6%** | Sobre 535 transacciones de test |
-| 📐 **F1 macro** | **0.965** | Media equilibrada por todas las categorías |
-| 🤖 **Escalado al LLM** | **0%** | El modelo clasifica todo solo con el umbral elegido |
-| ⚡ **Latencia media** | **16.8 ms** | p50: 12.8 ms · p95: 37 ms |
+| 🎯 **Precisión L1 (solo local)** | **91.2%** | Sobre 535 transacciones de test, umbral 0.90 |
+| 🎯 **Precisión L1+L2 (con LLM)** | **96.1%** | Combinando clasificador local + LLM para casos dudosos |
+| 📐 **F1 macro** | **0.913** | Media equilibrada por todas las categorías (L1) |
+| 🤖 **Escalado al LLM** | **10.84%** | ~1 de cada 9 transacciones va al LLM (umbral 0.90) |
+| ⚡ **Latencia media** | **55.5 ms** | p50: 40.9 ms · p95: 105.9 ms |
 
 </div>
 
@@ -91,6 +93,8 @@ Transacción entrante
 | 🎮 ocio | **0.9157** | `████████████████████    ` ⚠️ 92% |
 
 ### Informe de clasificación completo
+
+> **Nota:** los valores por categoría a continuación corresponden a una evaluación con umbral distinto al del artefacto final (0.90). El F1 macro del modelo entregado es **0.913** (ver `model_metadata.json`).
 
 ```
                  precision    recall  f1-score   support
@@ -292,20 +296,20 @@ Se probaron 6 grupos de transacciones, cada una escrita de **7-9 formas distinta
 
 | Percentil | Tiempo |
 |:---------:|:------:|
-| Media | **16.8 ms** |
-| p50 (transacción típica) | **12.8 ms** |
-| p95 (el 95% de las veces) | **37 ms** |
-| p99 (casos más lentos) | ~45 ms |
+| Media | **55.5 ms** |
+| p50 (transacción típica) | **40.9 ms** |
+| p95 (el 95% de las veces) | **105.9 ms** |
+| p99 (casos más lentos) | ~136 ms |
 
-> El nivel 1 funciona completamente **en local**, sin conexión a internet. Si la confianza baja del umbral (0.30), la llamada al LLM externo añade ~500-1500 ms según la latencia de red.
+> El nivel 1 funciona completamente **en local**, sin conexión a internet. Si la confianza baja del umbral (0.90), la llamada al LLM externo añade ~500-1500 ms según la latencia de red.
 
 ### Estimación de throughput
 
 ```
-10.000 transacciones/mes × 0% escalado LLM = 0 llamadas LLM/mes
-→ Coste LLM mensual: 0 €
+10.000 transacciones/mes × 10.84% escalado LLM = 1.084 llamadas LLM/mes
+→ 1.084 × 0,0002 €/llamada = 0,22 €/mes
 
-Si el umbral fuera más estricto y escalara el 5%:
+Si se bajara el umbral a 0.70 y escalara el ~5%:
 10.000 × 5% = 500 llamadas × 0,0002 €/llamada = 0,10 €/mes
 ```
 
@@ -357,7 +361,7 @@ classify("CARGO DESCONOCIDO",        -5.00)  → otros           (conf: 0.807, L
 
 ```bash
 export AZURE_OPENAI_ENDPOINT="https://tu-recurso.openai.azure.com"
-export AZURE_OPENAI_KEY="tu-api-key"
+export AZURE_OPENAI_API_KEY="tu-api-key"
 export AZURE_OPENAI_DEPLOYMENT="gpt-4o-mini"  # por defecto
 ```
 
@@ -434,16 +438,19 @@ proyecto/
   "embedder": "paraphrase-multilingual-MiniLM-L12-v2",
   "embedding_dim": 384,
   "categories": ["alimentacion", "compras", ...],
-  "confidence_threshold": 0.30,
+  "confidence_threshold": 0.90,
   "metrics": {
-    "accuracy_test_l1": 0.9664,
-    "f1_macro_test": 0.9653,
-    "pct_llm_fallback": 0.0
+    "accuracy_val": 0.9477,
+    "accuracy_test_l1": 0.9121,
+    "accuracy_test_l1_l2": 0.9607,
+    "f1_macro_test": 0.9127,
+    "pct_llm_fallback": 10.841
   },
   "latency_ms": {
-    "mean": 16.82,
-    "p50": 12.81,
-    "p95": 37.04
+    "mean": 55.547,
+    "p50": 40.891,
+    "p95": 105.921,
+    "p99": 136.121
   }
 }
 ```
