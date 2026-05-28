@@ -82,7 +82,7 @@ El LLM recibe **unicamente la descripcion anonimizada** (nunca datos personales)
 
 | Componente    | Real                        | Fallback                        |
 |---------------|-----------------------------|---------------------------------|
-| Clasificador  | `models/load_classifier.py` | mock por palabras clave         |
+| Clasificador  | LightGBM + embeddings MiniLM | mock por palabras clave        |
 | Anonimizacion | Presidio + regex            | solo regex (si falta Presidio)  |
 | Insights      | Azure OpenAI gpt-4o-mini    | plantilla local determinista    |
 
@@ -96,7 +96,7 @@ El LLM recibe **unicamente la descripcion anonimizada** (nunca datos personales)
 
 - Python 3.11, 3.12, 3.13 o 3.14
 - (Opcional) Credenciales Azure OpenAI para LLM real e insights
-- (Opcional) Python 3.11/3.12 + spacy para anonimizacion NER completa
+- Modelo spacy `es_core_news_md` para anonimizacion NER completa (ver paso 5)
 
 ### 1. Entorno virtual e instalacion
 
@@ -126,8 +126,8 @@ AZURE_OPENAI_API_KEY=tu-clave
 AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
 ```
 
-Sin credenciales el sistema funciona igual, usando el clasificador mock y
-la plantilla de insights.
+Sin credenciales el sistema funciona igual, usando el clasificador real (L1)
+y la plantilla de insights.
 
 ### 3. Arrancar la API
 
@@ -143,14 +143,26 @@ streamlit run dashboard/streamlit_app.py
 # Abre automaticamente http://localhost:8501
 ```
 
-### 5. (Opcional) Anonimizacion NER completa
+### 5. Anonimizacion NER completa (recomendado)
 
-Requiere Python 3.11 o 3.12:
+Presidio y spacy estan incluidos en `requirements.txt`. Solo falta descargar el modelo:
 
 ```bash
-pip install presidio-analyzer presidio-anonymizer spacy
 python -m spacy download es_core_news_md
 ```
+
+---
+
+### 6. Arranque rapido (Windows)
+
+Doble clic en `start_demo.bat` o desde cualquier terminal:
+
+```cmd
+start_demo.bat
+```
+
+Instala dependencias, arranca la API en segundo plano y abre el dashboard en el navegador
+(`http://localhost:8501`). La primera vez descarga el modelo de embeddings (~270 MB).
 
 ---
 
@@ -369,12 +381,15 @@ clarity-bank/
 
 - **Prototipo, no produccion**: sin autenticacion, sin HTTPS, SQLite de un solo
   fichero. Para escalar: PostgreSQL + autenticacion JWT + contenedores.
-- **Presidio/spacy no disponibles en Python 3.14** (sin wheel). Funciona solo-regex.
-  Para NER completo usar Python 3.11/3.12.
-- **Clasificador real pendiente**: hasta que ML entregue `models/load_classifier.py`
-  el sistema usa el mock por palabras clave (L1 siempre, L2 en caso de no-match).
+- **NER de nombres sin marcador**: la capa regex anonimiza nombres tras TRANSFERENCIA/BIZUM.
+  Para nombres en otros contextos (ej. "PAGO MARIA GARCIA") se necesita Presidio+spacy.
+  El modelo `es_core_news_md` requiere descarga separada (`python -m spacy download es_core_news_md`).
+- **Sklearn version mismatch**: el pkl fue entrenado con sklearn 1.6.1; el entorno usa 1.8.0.
+  Funciona con warning. Para eliminarlo, reentrenar el modelo con la version instalada.
 - **Deteccion de anomalias basada en historico**: necesita suficientes transacciones
-  previas para que el z-score sea significativo (minimo ~10 por categoria).
+  previas para que el z-score sea significativo (minimo 10 por categoria).
+- **L2 sin credenciales Azure**: transacciones de baja confianza se clasifican como `otros`
+  con confianza 0%. Conectar Azure OpenAI en `.env` para clasificacion real en casos dudosos.
 - **Coste LLM**: las llamadas a Azure OpenAI por `POST /insights/generate` tienen
   coste real si se usan credenciales de produccion.
 
