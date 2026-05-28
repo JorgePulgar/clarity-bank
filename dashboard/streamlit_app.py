@@ -91,11 +91,37 @@ with st.sidebar:
         st.session_state["user_id"] = uid
         st.rerun()
 
-tab1, tab2, tab3 = st.tabs(
+# Pool ordenado narrativamente para la simulacion de stream.
+# Los primeros son transacciones claras, luego aparecen outliers y casos LLM.
+_STREAM_POOL: list[tuple[str, float]] = [
+    ("PAGO TARJETA MERCADONA SL MADRID", -43.27),
+    ("NETFLIX SUSCRIPCION MENSUAL", -12.99),
+    ("UBER TRIP MADRID", -18.50),
+    ("GLOVO PEDIDO COMIDA", -24.80),
+    ("FARMACIA CENTRAL MADRID", -22.10),
+    ("ABONO NOMINA EMPRESA SL MADRID", 2000.00),
+    ("SPOTIFY PREMIUM", -10.99),
+    ("RENFE CERCANIAS BILLETE", -4.50),
+    ("AMAZON COMPRA ONLINE", -85.40),
+    ("REINTEGRO CONCEPTOS VARIOS CUENTA", 150.00),   # ambigua → LLM
+    ("TRANSFERENCIA ALQUILER PISO MADRID", -750.00),
+    ("AMAZON COMPRA ONLINE", -1450.00),               # outlier → anomalia
+    ("CARREFOUR EXPRESS MADRID", -38.90),
+    ("CUOTA ASOCIACION CULTURAL MADRID", -80.00),     # ambigua → LLM
+    ("BAR LA ESQUINA MADRID", -14.60),
+    ("IBERDROLA FACTURA LUZ OCTUBRE", -78.30),
+    ("RESTAURANTE EL CELLER DE CAN ROCA", -380.00),   # outlier → anomalia
+    ("ZARA TIENDA MADRID", -64.00),
+    ("TRANSFERENCIA BIZUM VARIOS", -950.00),           # outlier → anomalia
+    ("MOVISTAR FACTURA FIBRA", -49.99),
+]
+
+tab1, tab2, tab3, tab4 = st.tabs(
     [
         "Transaccion individual",
         "Importar historico",
         "Insights mensuales",
+        "Flujo en vivo",
     ]
 )
 
@@ -325,3 +351,123 @@ with tab3:
                 )
         except Exception as e:
             st.error(f"Error al generar insight: {e}")
+
+
+# --- Pantalla 4: flujo en vivo -------------------------------------------
+with tab4:
+    st.subheader("Flujo en vivo — Simulacion de stream de transacciones")
+    st.caption(
+        "Simula la llegada continua de transacciones, como llegarian desde un consumer Kafka "
+        "o webhook bancario en produccion. El pipeline es identico: anonimizacion RGPD → "
+        "clasificacion (L1/L2) → deteccion de anomalias."
+    )
+
+    col_v, col_n, col_info = st.columns([1, 1, 2])
+    velocidad = col_v.slider(
+        "Intervalo (s)",
+        min_value=0.3,
+        max_value=3.0,
+        value=1.0,
+        step=0.1,
+        key="stream_vel",
+        help="Tiempo entre transacciones. En produccion este ritmo lo marca Kafka/webhook.",
+    )
+    n_stream = col_n.slider(
+        "Num. transacciones",
+        min_value=5,
+        max_value=len(_STREAM_POOL),
+        value=12,
+        key="stream_n",
+    )
+    col_info.info(
+        f"Se procesaran {n_stream} transacciones con {velocidad}s de intervalo "
+        f"(~{n_stream * velocidad:.0f}s total). "
+        "Los outliers aparecen a partir de la transaccion 10."
+    )
+
+    iniciar = st.button(
+        "Iniciar simulacion",
+        type="primary",
+        key="btn_stream",
+        disabled=not api_ok,
+    )
+    if not api_ok:
+        st.warning("API no disponible. Arranca la API para usar esta pantalla.")
+
+    if iniciar:
+        txs_a_procesar = _STREAM_POOL[:n_stream]
+
+        ph_estado = st.empty()
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        ph_total = col_m1.empty()
+        ph_anomalias = col_m2.empty()
+        ph_llm = col_m3.empty()
+        ph_tiempo = col_m4.empty()
+        ph_tabla = st.empty()
+        ph_chart = st.empty()
+
+        filas: list[dict] = []
+        t_inicio = time.time()
+
+        for i, (desc, amount) in enumerate(txs_a_procesar, 1):
+            ph_estado.info(f"Procesando {i}/{len(txs_a_procesar)}: {desc[:50]}...")
+
+            try:
+                resp = requests.post(
+                    f"{API_URL}/transactions",
+                    json={"user_id": user_id, "description": desc, "amount": amount},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                tx = resp.json()
+
+                anon = tx.get("description_anonymized") or desc
+                nivel = "L2 LLM" if tx["classification_level"] == 2 else "L1 local"
+                filas.append(
+                    {
+                        "Descripcion": desc[:42] + "…" if len(desc) > 42 else desc,
+                        "Anonimizada": anon[:42] + "…" if len(anon) > 42 else anon,
+                        "Categoria": tx["category"],
+                        "Confianza": f"{tx['confidence']:.0%}",
+                        "Nivel": nivel,
+                        "Importe": f"{amount:+.2f}",
+                        "Anomalia": "SI" if tx["is_anomaly"] else "—",
+                    }
+                )
+            except Exception:
+                filas.append(
+                    {
+                        "Descripcion": desc[:42],
+                        "Anonimizada": "—",
+                        "Categoria": "error",
+                        "Confianza": "—",
+                        "Nivel": "—",
+                        "Importe": f"{amount:+.2f}",
+                        "Anomalia": "ERR",
+                    }
+                )
+
+            n_ok = sum(1 for f in filas if f["Categoria"] != "error")
+            n_anom = sum(1 for f in filas if f["Anomalia"] == "SI")
+            n_llm_cnt = sum(1 for f in filas if f["Nivel"] == "L2 LLM")
+            elapsed = time.time() - t_inicio
+
+            ph_total.metric("Procesadas", n_ok)
+            ph_anomalias.metric("Anomalias", n_anom)
+            ph_llm.metric("Escaladas LLM", n_llm_cnt)
+            ph_tiempo.metric("Tiempo", f"{elapsed:.1f}s")
+
+            df_live = pd.DataFrame(filas)
+            ph_tabla.dataframe(df_live, use_container_width=True, hide_index=True)
+
+            cats = df_live[df_live["Categoria"] != "error"]["Categoria"].value_counts()
+            if not cats.empty:
+                ph_chart.bar_chart(cats, use_container_width=True)
+
+            time.sleep(velocidad)
+
+        elapsed_final = time.time() - t_inicio
+        ph_estado.success(
+            f"Simulacion completada: {n_ok}/{len(txs_a_procesar)} procesadas en "
+            f"{elapsed_final:.1f}s | {n_anom} anomalias | {n_llm_cnt} escaladas a LLM"
+        )
