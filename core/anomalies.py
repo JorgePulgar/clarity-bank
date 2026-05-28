@@ -12,9 +12,9 @@ from __future__ import annotations
 from statistics import mean, pstdev
 
 # Umbrales z-score
-Z_THRESHOLD = 2.5  # |z| > 2.5 -> cola del 1.2% por lado
-MIN_SAMPLES = 5  # minimo de muestras para que z sea fiable
-JUMP_FACTOR = 4.0  # fallback con pocos datos: importe >= 4x maximo historico
+Z_THRESHOLD = 3.0  # |z| > 3.0 -> regla 3-sigma, cola del 0.13% por lado
+MIN_SAMPLES = 10  # minimo de muestras para que z sea fiable
+JUMP_FACTOR = 5.0  # fallback con pocos datos: importe >= 5x maximo historico
 
 # Umbrales suscripcion
 MIN_SUBSCRIPTION_SAMPLES = 3  # pagos previos minimos para activar el detector
