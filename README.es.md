@@ -52,6 +52,7 @@ El proyecto está dividido en dos partes: mi compañera entrenó el clasificador
 - [Por qué importa](#por-qué-importa)
 - [Arquitectura](#arquitectura)
 - [Estadísticas](#estadísticas)
+- [Coste y latencia medidos (benchmark)](#coste-y-latencia-medidos-benchmark)
 - [Decisiones de diseño clave](#decisiones-de-diseño-clave)
 - [Cómo se cumplen las garantías principales](#cómo-se-cumplen-las-garantías-principales)
 - [Limitaciones conocidas](#limitaciones-conocidas)
@@ -196,6 +197,7 @@ clarity-bank/
 │   └── streamlit_app.py       # UI de la demo Streamlit
 ├── scripts/
 │   ├── generate_history.py    # Genera historial sintético de transacciones
+│   ├── benchmark.py           # Benchmark empírico de coste y latencia (usage real de Azure)
 │   └── e2e_demo.py            # Prueba de humo end-to-end
 ├── tests/
 │   ├── conftest.py
@@ -206,7 +208,10 @@ clarity-bank/
 ├── fases/                     # Planes de fase y progreso de desarrollo
 ├── docs/
 │   ├── claritybank_prototipo.drawio.png
-│   └── claritybank_produccion.drawio.png
+│   ├── claritybank_produccion.drawio.png
+│   └── *.png                  # Figuras del benchmark (tokens, latencia, coste)
+├── reports/
+│   └── benchmark_<timestamp>.json  # Mediciones crudas del benchmark
 ├── data/
 │   └── clarity.db             # Base de datos SQLite (en .gitignore)
 ├── start_demo.bat             # Arranque con un clic (Windows)
@@ -322,6 +327,88 @@ En un despliegue de producción, la demo Streamlit se sustituye por un frontend 
 | Falsos positivos de anonimización | 0 |
 | Tasa de anomalías (329 transacciones, params ajustados) | 1,2% (4 marcadas) |
 | Fases de desarrollo completadas | 5 / 6 |
+
+[↑ Volver al inicio](#tabla-de-contenidos)
+
+---
+
+## Coste y latencia medidos (benchmark)
+
+Las cifras de coste y latencia de abajo están **medidas, no estimadas**. `scripts/benchmark.py` ejecuta el pipeline completo sobre 1.200 transacciones, hace 100 llamadas reales de clasificación L2 y 30 de insights a Azure OpenAI, y lee el número exacto de tokens facturados del campo `response.usage` (no una aproximación con `tiktoken`). Los tiempos vienen de `time.perf_counter()`. La ejecución es determinista (`seed=42`); se descartan 2–3 llamadas de warmup antes de medir.
+
+Ejecútalo tú mismo:
+
+```bash
+python scripts/benchmark.py                       # defaults: 1.200 tx · 100 L2 · 30 insights
+python scripts/benchmark.py --n-classifications 100 --n-insights 30 --pool-size 1200
+```
+
+Genera un informe en consola, un JSON con los datos crudos en `reports/benchmark_<timestamp>.json` y las tres figuras de abajo. Coste total de una ejecución del benchmark: **130 llamadas al LLM ≈ 0,0086 €**.
+
+### Coste en tokens del LLM (Azure `gpt-4o-mini`, Sweden Central)
+
+| Tipo de llamada | Tokens input (media / p95 / max) | Tokens output (media / p95) | Coste por llamada |
+|-----------------|----------------------------------|-----------------------------|-------------------|
+| Clasificación L2 (N=100) | 112 / 115 / 117 | 3 / 4 | **0,0000171 €** (USD 0,0000186) |
+| Insight mensual (N=30) | 277 / 280 / 280 | 350 / 372 | **0,000231 €** (USD 0,0002514) |
+
+![Distribución de tokens input por tipo de llamada](docs/tokens_input_hist.png)
+
+### Tasa de escalado (L1 vs L2)
+
+| | Recuento | Porcentaje |
+|--|---------:|-----------:|
+| Resueltas en L1 (local, gratis) | 1.010 | 84,2% |
+| Escaladas a L2 (LLM) | 190 | 15,8% |
+
+Categorías que más escalan: `otros` (116), `compras` (37), `restauracion` (37).
+
+> **Nota:** el pool de 1.200 transacciones incluye 100 transacciones deliberadamente ambiguas inyectadas para garantizar una muestra ≥100 para medir tokens de L2. La tasa de escalado **natural** sobre datos sintéticos realistas sola es del ~8%, consistente con el >91% de L1 de [Estadísticas](#estadísticas). La proyección de coste de abajo usa el 15,8% medido, así que es una **cota superior conservadora** — el coste real es menor.
+
+### Latencia end-to-end por componente (máquina de desarrollo, pipeline completo)
+
+| Componente | Media | p95 |
+|------------|------:|----:|
+| Anonimización | 13,5ms | 16,5ms |
+| Clasificación L1 (embedding + LightGBM) | 45,3ms | 56,8ms |
+| Clasificación L2 (LLM, solo cuando aplica) | 803ms | 1.010ms |
+| Detección de anomalías | 5,9ms | 7,2ms |
+| Guardado en BD | 10,4ms | 48,2ms |
+| **TOTAL — solo L1** | **72,2ms** | **85,0ms** |
+| **TOTAL — escaladas (con L2)** | **913ms** | **1.145ms** |
+| **TOTAL — combinado** | 148ms (mediana 72ms) | **879ms** (p99 1.055ms) |
+
+![Distribución de latencia end-to-end](docs/latencia_hist.png)
+
+### Proyección a escala ClarityBank (2,1M tx/mes · 340K usuarios)
+
+| | Mensual | Anual |
+|--|--------:|------:|
+| Clasificación L2 (332.500 llamadas/mes) | 5,69 € | 68,25 € |
+| Insights (340.000/mes) | 78,64 € | 943,66 € |
+| **Total LLM** | **84,33 €** | **1.011,91 €** |
+
+Coste por usuario/mes: **0,000248 €**.
+
+### Comparación vs naive (enviar todo al LLM)
+
+| Escenario | Coste mensual | Ahorro vs propuesta |
+|-----------|--------------:|--------------------:|
+| **Propuesta (dos niveles)** | **84,33 €** | — |
+| A — todo a `gpt-4o-mini` | 114,56 € | **26,4%** |
+| B — todo a `gpt-4o` (modelo grande) | 1.909,36 € | **95,6%** |
+
+![Coste mensual: propuesta vs naive](docs/coste_comparativa.png)
+
+### Latencia vs el requisito <3s
+
+| Métrica | Valor | Veredicto |
+|---------|------:|:---------:|
+| p95 end-to-end combinado | 879ms | ✅ dentro de 3s |
+| p99 end-to-end combinado | 1.055ms | ✅ dentro de 3s |
+| Margen sobre 3s | 70,7% | — |
+
+Los insights se generan como un lote mensual y no están sujetos al objetivo de <3s por transacción.
 
 [↑ Volver al inicio](#tabla-de-contenidos)
 
@@ -450,6 +537,7 @@ La decisión de anonimizar antes de clasificar es correcta — garantía RGPD po
 - [`docs/claritybank_prototipo.drawio.png`](docs/claritybank_prototipo.drawio.png) — diagrama de arquitectura del prototipo
 - [`docs/claritybank_produccion.drawio.png`](docs/claritybank_produccion.drawio.png) — diagrama de arquitectura de producción
 - [`models/model_metadata.json`](models/model_metadata.json) — métricas del clasificador, umbral y configuración de embeddings
+- [`scripts/benchmark.py`](scripts/benchmark.py) — benchmark empírico de coste y latencia; mediciones crudas en `reports/`
 - `.env.example` — todas las variables de configuración con descripciones inline
 
 [↑ Volver al inicio](#tabla-de-contenidos)

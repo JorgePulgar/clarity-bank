@@ -24,6 +24,13 @@ data/*.csv
 data/*.json
 !.gitkeep
 
+# Artefactos de coverage (generados)
+.coverage
+coverage.json
+
+# Figuras del benchmark: se versionan en docs/, no las copias de reports/
+reports/*.png
+
 # IDE / OS
 .vscode/
 .idea/

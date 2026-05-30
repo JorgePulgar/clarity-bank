@@ -52,6 +52,7 @@ The project is split in two: my classmate trained the ML classifier (LightGBM + 
 - [Why this matters](#why-this-matters)
 - [Architecture](#architecture)
 - [Stats](#stats)
+- [Measured cost & latency (benchmark)](#measured-cost--latency-benchmark)
 - [Key design decisions](#key-design-decisions)
 - [How the core guarantees are met](#how-the-core-guarantees-are-met)
 - [Known limitations](#known-limitations)
@@ -196,6 +197,7 @@ clarity-bank/
 │   └── streamlit_app.py       # Streamlit demo UI
 ├── scripts/
 │   ├── generate_history.py    # Generate synthetic transaction history
+│   ├── benchmark.py           # Empirical cost & latency benchmark (real Azure usage)
 │   └── e2e_demo.py            # End-to-end smoke test
 ├── tests/
 │   ├── conftest.py
@@ -206,7 +208,10 @@ clarity-bank/
 ├── fases/                     # Development phase plans and progress
 ├── docs/
 │   ├── claritybank_prototipo.drawio.png
-│   └── claritybank_produccion.drawio.png
+│   ├── claritybank_produccion.drawio.png
+│   └── *.png                  # Benchmark figures (tokens, latency, cost)
+├── reports/
+│   └── benchmark_<timestamp>.json  # Raw benchmark measurements
 ├── data/
 │   └── clarity.db             # SQLite database (gitignored)
 ├── start_demo.bat             # One-click launch (Windows)
@@ -322,6 +327,88 @@ In a production deployment the Streamlit demo is replaced by a proper frontend, 
 | Anonymisation false positives | 0 |
 | Anomaly rate (329 transactions, tuned params) | 1.2% (4 flagged) |
 | Development phases complete | 5 / 6 |
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## Measured cost & latency (benchmark)
+
+The cost and latency figures below are **measured, not estimated**. `scripts/benchmark.py` runs the full pipeline against 1,200 transactions, makes 100 real L2 classification calls and 30 real insight calls to Azure OpenAI, and reads the exact billed token counts from the `response.usage` field (not a `tiktoken` approximation). Timings come from `time.perf_counter()`. The run is deterministic (`seed=42`); 2–3 warm-up LLM calls are discarded before measuring.
+
+Run it yourself:
+
+```bash
+python scripts/benchmark.py                       # defaults: 1,200 tx · 100 L2 · 30 insights
+python scripts/benchmark.py --n-classifications 100 --n-insights 30 --pool-size 1200
+```
+
+It writes a console report, a raw-data JSON to `reports/benchmark_<timestamp>.json`, and the three figures below. Total cost of one benchmark run: **130 LLM calls ≈ €0.0086**.
+
+### LLM token cost (Azure `gpt-4o-mini`, Sweden Central)
+
+| Call type | Input tokens (mean / p95 / max) | Output tokens (mean / p95) | Cost per call |
+|-----------|--------------------------------|----------------------------|---------------|
+| L2 classification (N=100) | 112 / 115 / 117 | 3 / 4 | **€0.0000171** (USD 0.0000186) |
+| Monthly insight (N=30) | 277 / 280 / 280 | 350 / 372 | **€0.000231** (USD 0.0002514) |
+
+![Input token distribution by call type](docs/tokens_input_hist.png)
+
+### Escalation rate (L1 vs L2)
+
+| | Count | Share |
+|--|------:|------:|
+| Resolved at L1 (local, free) | 1,010 | 84.2% |
+| Escalated to L2 (LLM) | 190 | 15.8% |
+
+Top escalating categories: `otros` (116), `compras` (37), `restauracion` (37).
+
+> **Note:** the 1,200-transaction pool includes 100 deliberately ambiguous transactions injected to guarantee a ≥100-sample for L2 token measurement. The **natural** escalation rate on realistic synthetic data alone is ~8%, consistent with the >91% L1 figure in [Stats](#stats). The cost projection below uses the measured 15.8%, so it is a **conservative upper bound** — real cost is lower.
+
+### End-to-end latency per component (dev machine, full pipeline)
+
+| Component | Mean | p95 |
+|-----------|-----:|----:|
+| Anonymisation | 13.5ms | 16.5ms |
+| Classification L1 (embedding + LightGBM) | 45.3ms | 56.8ms |
+| Classification L2 (LLM, only when it fires) | 803ms | 1,010ms |
+| Anomaly detection | 5.9ms | 7.2ms |
+| DB write | 10.4ms | 48.2ms |
+| **TOTAL — L1 only** | **72.2ms** | **85.0ms** |
+| **TOTAL — escalated (with L2)** | **913ms** | **1,145ms** |
+| **TOTAL — combined** | 148ms (median 72ms) | **879ms** (p99 1,055ms) |
+
+![End-to-end latency distribution](docs/latencia_hist.png)
+
+### Projection at ClarityBank scale (2.1M tx/month · 340K users)
+
+| | Monthly | Annual |
+|--|--------:|-------:|
+| L2 classification (332,500 calls/mo) | €5.69 | €68.25 |
+| Insights (340,000/mo) | €78.64 | €943.66 |
+| **Total LLM** | **€84.33** | **€1,011.91** |
+
+Cost per user/month: **€0.000248**.
+
+### Comparison vs naive (send everything to the LLM)
+
+| Scenario | Monthly cost | Saving vs proposed |
+|----------|-------------:|-------------------:|
+| **Proposed (two-level)** | **€84.33** | — |
+| A — all to `gpt-4o-mini` | €114.56 | **26.4%** |
+| B — all to `gpt-4o` (large model) | €1,909.36 | **95.6%** |
+
+![Monthly cost: proposed vs naive](docs/coste_comparativa.png)
+
+### Latency vs the <3s requirement
+
+| Metric | Value | Verdict |
+|--------|------:|:-------:|
+| Combined end-to-end p95 | 879ms | ✅ within 3s |
+| Combined end-to-end p99 | 1,055ms | ✅ within 3s |
+| Margin under 3s | 70.7% | — |
+
+Insights are generated as a monthly batch and are not subject to the per-transaction <3s target.
 
 [↑ Back to top](#table-of-contents)
 
@@ -450,6 +537,7 @@ The anonymise-before-classify ordering is correct — GDPR-safe by construction,
 - [`docs/claritybank_prototipo.drawio.png`](docs/claritybank_prototipo.drawio.png) — prototype architecture diagram
 - [`docs/claritybank_produccion.drawio.png`](docs/claritybank_produccion.drawio.png) — production architecture diagram
 - [`models/model_metadata.json`](models/model_metadata.json) — classifier metrics, threshold, and embedding configuration
+- [`scripts/benchmark.py`](scripts/benchmark.py) — empirical cost & latency benchmark; raw measurements in `reports/`
 - `.env.example` — all configuration variables with inline descriptions
 
 [↑ Back to top](#table-of-contents)
