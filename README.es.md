@@ -400,6 +400,13 @@ Coste por usuario/mes: **0,000248 €**.
 
 ![Coste mensual: propuesta vs naive](docs/coste_comparativa.png)
 
+**Dos palancas de coste, medidas.** La arquitectura ahorra dinero en dos ejes independientes:
+
+1. **Elección de modelo — `gpt-4o-mini` en vez de `gpt-4o`.** Para exactamente el mismo volumen de tokens, `gpt-4o-mini` es **~94% más barato** por llamada (escenario A 114,56 € vs escenario B 1.909,36 €). Usar el modelo pequeño es la mayor decisión de coste del proyecto.
+2. **Enrutado en dos niveles — no enviar todo al LLM.** El clasificador L1 local resuelve ~84% de las transacciones a coste marginal cero, así que solo la minoría incierta llega al LLM. Esto baja la factura de 114,56 € (todo a `gpt-4o-mini`) hasta **84,33 €/mes**.
+
+Combinadas, el diseño de dos niveles + `gpt-4o-mini` cuesta **84,33 €/mes frente a 1.909,36 €/mes** del enfoque naive "todo a `gpt-4o`" — una **reducción del 95,6%**, a **0,000248 € por usuario/mes**. Cifras proyectadas a partir de costes por llamada medidos, no estimados.
+
 ### Latencia vs el requisito <3s
 
 | Métrica | Valor | Veredicto |

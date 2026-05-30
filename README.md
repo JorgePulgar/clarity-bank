@@ -400,6 +400,13 @@ Cost per user/month: **€0.000248**.
 
 ![Monthly cost: proposed vs naive](docs/coste_comparativa.png)
 
+**Two cost levers, measured.** The architecture saves money on two independent axes:
+
+1. **Model choice — `gpt-4o-mini` instead of `gpt-4o`.** For the exact same token volume, `gpt-4o-mini` is **~94% cheaper** per call (scenario A €114.56 vs scenario B €1,909.36). Using the small model is the single biggest cost decision in the project.
+2. **Two-level routing — don't send everything to the LLM.** The local L1 classifier resolves ~84% of transactions at zero marginal cost, so only the uncertain minority reaches the LLM. This takes the bill from €114.56 (all to `gpt-4o-mini`) down to **€84.33/month**.
+
+Combined, the two-level + `gpt-4o-mini` design costs **€84.33/month vs €1,909.36/month** for the naive "everything to `gpt-4o`" approach — a **95.6% reduction**, at **€0.000248 per user/month**. These are projected from measured per-call costs, not estimated.
+
 ### Latency vs the <3s requirement
 
 | Metric | Value | Verdict |
