@@ -423,7 +423,15 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 ## Decisiones de diseño clave
 
-### 1. Pipeline único en `api/service.py`
+### 1. Cascada en dos niveles — ML local primero, LLM solo para los casos difíciles
+
+**Decisión:** cada transacción la clasifica primero el modelo L1 local (embeddings de sentence-transformer + LightGBM). El LLM de Azure OpenAI (L2) se llama **solo** cuando la confianza de L1 cae por debajo del umbral.
+
+**Alternativa considerada:** enviar cada transacción directamente al LLM — un solo camino de código, sin modelo local que entrenar, distribuir ni cargar.
+
+**Justificación:** la inferencia local tiene **coste marginal cero**. Una vez cargado el modelo, clasificar una transacción cuesta milisegundos de CPU, no euros — el machine learning no factura por llamada, el LLM sí. El benchmark confirma que ~84% de las transacciones se resuelven en L1, así que el LLM se paga solo para la minoría incierta. Esto mantiene la precisión combinada L1+L2 en el 96,1% mientras recorta la factura mensual proyectada de 1.909 € (todo a `gpt-4o`) a 84 € (ver [Coste y latencia medidos](#coste-y-latencia-medidos-benchmark)). La cascada es el núcleo de todo el diseño: el modelo de ML lleva el volumen gratis, el LLM lleva solo la dificultad.
+
+### 2. Pipeline único en `api/service.py`
 
 **Decisión:** una función `process_transaction()` llamada tanto por `POST /transactions` (individual) como por `POST /transactions/import` (masivo).
 
@@ -431,7 +439,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Justificación:** dos puntos de entrada que hacen lo mismo acabarán divergiendo. Una función es un sitio para leer, un sitio para testear, un sitio para cambiar.
 
-### 2. Anonimizar antes de clasificar, no solo antes del LLM
+### 3. Anonimizar antes de clasificar, no solo antes del LLM
 
 **Decisión:** `anonymize()` es el paso 1 del pipeline — antes de que corra el clasificador L1.
 
@@ -439,7 +447,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Justificación:** dos razones. Primera, `description_anonymized` es lo que persiste en SQLite — nunca almacenamos PII en reposo. Segunda, los datos de entrenamiento incluían tokens anonimizados (`<PERSONA>`, `<IBAN>`), así que el clasificador ya está calibrado para manejar texto enmascarado. El orden garantiza el cumplimiento RGPD de forma estructural, no por convención.
 
-### 3. Clasificador sustituible por mock via `NotImplementedError`
+### 4. Clasificador sustituible por mock via `NotImplementedError`
 
 **Decisión:** `models/load_classifier.py::load()` lanza `NotImplementedError`; `core/classify.py` captura esa excepción y cae al matching por keywords.
 
@@ -447,7 +455,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Justificación:** el patrón `NotImplementedError` hace la sustitución sin ningún cambio adicional — en cuanto `load()` devuelve un callable, el mock desaparece sin tocar ningún otro fichero. Permitió entregar una API funcional semanas antes de que el modelo estuviera listo. `GET /health` informa del modo activo.
 
-### 4. Umbral de producción 0,70, no el 0,90 embebido en el pkl
+### 5. Umbral de producción 0,70, no el 0,90 embebido en el pkl
 
 **Decisión:** sobrescribir el umbral de confianza almacenado en el modelo de 0,90 a 0,70.
 
@@ -455,7 +463,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Justificación:** con umbral 0,90, el 10,84% de las transacciones escalaban al LLM aunque la predicción L1 era correcta. Las pruebas mostraron que 0,70 reduce el volumen de llamadas al LLM de forma significativa manteniendo la precisión combinada L1+L2 en el 96,1%. El umbral almacenado estaba calibrado para maximizar la precisión L1 standalone, no para eficiencia de coste a 2,1M transacciones/mes.
 
-### 5. Anonimización degradable
+### 6. Anonimización degradable
 
 **Decisión:** `core/anonymization.py` siempre ejecuta la capa de regex; Presidio NER se importa al cargar el módulo y se omite silenciosamente si no está disponible.
 
@@ -463,7 +471,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Justificación:** `presidio-analyzer`/`spacy` no tenían wheels para Python 3.14 en el momento del desarrollo. Hacerlos dependencias obligatorias habría bloqueado el desarrollo de la API. La capa de regex cubre la superficie principal de PII (IBANs, DNIs, teléfonos, emails, patrones de nombre); Presidio añade recall en casos límite. La API arranca y anonimiza en cualquier caso.
 
-### 6. Fallback por plantilla para insights
+### 7. Fallback por plantilla para insights
 
 **Decisión:** `core/insights.py` devuelve un insight determinista basado en plantilla (`source="template"`) cuando `AZURE_OPENAI_API_KEY` está vacío.
 

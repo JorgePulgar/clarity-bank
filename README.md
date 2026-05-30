@@ -423,7 +423,15 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 ## Key design decisions
 
-### 1. Single pipeline in `api/service.py`
+### 1. Two-level cascade — local ML first, LLM only for the hard cases
+
+**Choice:** every transaction is classified first by the local L1 model (sentence-transformer embeddings + LightGBM). The Azure OpenAI LLM (L2) is called **only** when L1 confidence falls below the threshold.
+
+**Alternative considered:** send every transaction straight to the LLM — one code path, no local model to train, ship, or load.
+
+**Rationale:** local inference has **zero marginal cost**. Once the model is loaded, classifying a transaction costs CPU milliseconds, not euros — machine learning does not bill per call, the LLM does. The benchmark confirms ~84% of transactions resolve at L1, so the LLM is paid for only the uncertain minority. This keeps combined L1+L2 accuracy at 96.1% while cutting the projected monthly bill from €1,909 (everything to `gpt-4o`) to €84 (see [Measured cost & latency](#measured-cost--latency-benchmark)). The cascade is the core of the whole design: the ML model carries the volume for free, the LLM carries only the difficulty.
+
+### 2. Single pipeline in `api/service.py`
 
 **Choice:** one `process_transaction()` function called by both `POST /transactions` (single) and `POST /transactions/import` (bulk).
 
@@ -431,7 +439,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Rationale:** two entry points that do the same thing will eventually diverge. One function is one place to read, one place to test, one place to change.
 
-### 2. Anonymise before classify, not just before the LLM call
+### 3. Anonymise before classify, not just before the LLM call
 
 **Choice:** `anonymize()` is step 1 in the pipeline — before the L1 classifier runs.
 
@@ -439,7 +447,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Rationale:** two reasons. First, `description_anonymized` is what persists to SQLite — we never store raw PII at rest. Second, the training data included anonymised tokens (`<PERSONA>`, `<IBAN>`), so the classifier is already calibrated to handle masked text. The ordering enforces the GDPR guarantee structurally, not by convention.
 
-### 3. Mock-substitutable classifier via `NotImplementedError`
+### 4. Mock-substitutable classifier via `NotImplementedError`
 
 **Choice:** `models/load_classifier.py::load()` raises `NotImplementedError`; `core/classify.py` catches that exception and falls back to keyword matching.
 
@@ -447,7 +455,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Rationale:** the `NotImplementedError` pattern makes substitution zero-touch — once `load()` returns a callable, the mock is gone without touching any other file. It made it possible to deliver a working API weeks before the ML model was ready. `GET /health` reports the active mode.
 
-### 4. Production threshold 0.70, not the pkl's embedded 0.90
+### 5. Production threshold 0.70, not the pkl's embedded 0.90
 
 **Choice:** override the model's stored confidence threshold from 0.90 to 0.70.
 
@@ -455,7 +463,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Rationale:** at threshold 0.90, 10.84% of transactions escalated to the LLM even when the L1 prediction was correct. Testing showed 0.70 reduces LLM call volume meaningfully while keeping combined L1+L2 accuracy at 96.1%. The stored threshold was tuned for maximum standalone L1 accuracy, not for cost efficiency at 2.1M transactions/month.
 
-### 5. Degradable anonymisation
+### 6. Degradable anonymisation
 
 **Choice:** `core/anonymization.py` always runs the regex layer; Presidio NER is imported at module load and silently skipped if unavailable.
 
@@ -463,7 +471,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Rationale:** `presidio-analyzer`/`spacy` had no wheels for Python 3.14 at development time. Making them hard dependencies would have blocked API development. The regex layer handles the core PII surface (IBANs, DNIs, phones, emails, name patterns); Presidio adds recall on edge cases. The API starts and anonymises regardless.
 
-### 6. Template fallback for insights
+### 7. Template fallback for insights
 
 **Choice:** `core/insights.py` returns a deterministic template-based insight (`source="template"`) when `AZURE_OPENAI_API_KEY` is empty.
 
