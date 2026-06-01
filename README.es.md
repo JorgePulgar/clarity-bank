@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>Pipeline de categorización de transacciones en dos niveles para una fintech española</b> · Backend FastAPI · Dashboard Streamlit<br>
-  <sub>LightGBM · Azure OpenAI · Anonimización RGPD con Presidio · Detección de anomalías · Prototipo TFM</sub>
+  <sub>LightGBM · Azure OpenAI · Anonimización RGPD con Presidio · Detección de anomalías · Prototipo de proyecto</sub>
 </p>
 
 <p align="center">
@@ -34,11 +34,11 @@ Prototipo FastAPI + Streamlit que clasifica descripciones brutas de transaccione
 - **Cumplimiento RGPD por diseño**: Presidio + regex elimina nombres, IBANs, DNIs y teléfonos antes de cualquier llamada al LLM — 100% de recall de PII, 0 falsos positivos en tests
 - **Detección de anomalías** sobre el histórico de gasto de cada usuario — z-score (σ = 3,0) + detector de cambios en suscripciones — tasa de detección del 1,2% con datos realistas
 - **Insights mensuales en lenguaje natural** via `gpt-4o-mini` con fallback determinista por plantilla — la demo funciona sin credenciales cloud
-- Prototipo TFM para **ClarityBank**, agregador fintech español (340K usuarios, 2,1M transacciones/mes)
+- Prototipo de proyecto para **ClarityBank**, agregador fintech español (340K usuarios, 2,1M transacciones/mes)
 
 ## Resumen del proyecto
 
-ClarityBank es un prototipo de TFM (Trabajo Fin de Máster) para un agregador de banca abierta español. El sistema recibe descripciones brutas de transacciones bancarias junto con sus importes, y asigna automáticamente cada transacción a una de 12 categorías de gasto fijas. Además de clasificar, detecta anomalías de gasto comparando contra el histórico de cada usuario y genera resúmenes financieros mensuales en lenguaje natural.
+ClarityBank es un prototipo de proyecto de asignatura de máster para un agregador de banca abierta español. El sistema recibe descripciones brutas de transacciones bancarias junto con sus importes, y asigna automáticamente cada transacción a una de 12 categorías de gasto fijas. Además de clasificar, detecta anomalías de gasto comparando contra el histórico de cada usuario y genera resúmenes financieros mensuales en lenguaje natural.
 
 El proyecto está dividido en dos partes: mi compañera entrenó el clasificador ML (LightGBM + embeddings multilingüe). Yo construí la infraestructura: API REST, persistencia SQLite, pipeline de anonimización RGPD, motor de detección de anomalías, generación de insights con fallback al LLM y el dashboard Streamlit. La interfaz del clasificador es una única función `load()` — hasta que se entregó el modelo, un mock basado en keywords funcionó de forma transparente en su lugar.
 
@@ -477,7 +477,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 
 **Alternativa considerada:** devolver HTTP 503 si el LLM no está configurado.
 
-**Justificación:** la evaluación del TFM requiere una demo funcional. Un insight estático útil es mejor que un 503 para evaluadores sin acceso a Azure. Cuando hay credenciales, el path real del LLM se activa de forma transparente — el schema de respuesta es idéntico.
+**Justificación:** la evaluación del curso requiere una demo funcional. Un insight estático útil es mejor que un 503 para evaluadores sin acceso a Azure. Cuando hay credenciales, el path real del LLM se activa de forma transparente — el schema de respuesta es idéntico.
 
 [↑ Volver al inicio](#tabla-de-contenidos)
 
@@ -504,7 +504,7 @@ Los insights se generan como un lote mensual y no están sujetos al objetivo de 
 - **Python 3.14 + Presidio** — `presidio-analyzer`/`spacy` no tenían wheels para 3.14 en el momento del desarrollo. En 3.14 la anonimización degrada a regex puro, lo que pierde casos límite como nombres en MAYÚSCULAS completas. Para NER completo: Python 3.11 o 3.12 + `python -m spacy download es_core_news_md`.
 - **Streaming simulado** — el "feed en directo" de Streamlit usa bucles `st.rerun()`, no push en tiempo real. En producción esto sería un consumidor Kafka o un webhook listener sobre el mismo endpoint `POST /transactions`.
 - **Frontera suscripciones/ocio** — cuando el nombre exacto de la plataforma no aparece en la descripción (p.ej. `PAGO PLATAFORMA STREAMING`), la precisión del clasificador en `suscripciones` cae al ~62% en los tests de robustez. Añadir más ejemplos de entrenamiento para descripciones genéricas de suscripciones es la corrección documentada.
-- **Desajuste de versión sklearn** — `classifier.pkl` fue entrenado con scikit-learn 1.6.1; `requirements.txt` fija >= 1.4. Esto genera `InconsistentVersionWarning`. El modelo funciona correctamente, pero se recomienda reentrenar con 1.8.x antes de la entrega final del TFM.
+- **Desajuste de versión sklearn** — `classifier.pkl` fue entrenado con scikit-learn 1.6.1; `requirements.txt` fija >= 1.4. Esto genera `InconsistentVersionWarning`. El modelo funciona correctamente, pero se recomienda reentrenar con 1.8.x antes de la entrega final.
 - **Fase 6 incompleta** — tests de integración end-to-end, exportación de documentación de la API y model card están pendientes.
 
 [↑ Volver al inicio](#tabla-de-contenidos)

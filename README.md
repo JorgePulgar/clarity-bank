@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>Two-level transaction categorisation pipeline for a Spanish fintech aggregator</b> · FastAPI backend · Streamlit dashboard<br>
-  <sub>LightGBM · Azure OpenAI · Presidio GDPR anonymisation · Anomaly detection · TFM prototype</sub>
+  <sub>LightGBM · Azure OpenAI · Presidio GDPR anonymisation · Anomaly detection · Project prototype</sub>
 </p>
 
 <p align="center">
@@ -34,11 +34,11 @@ A FastAPI + Streamlit prototype that classifies raw bank transaction description
 - **GDPR-compliant by design**: Presidio + regex anonymisation strips names, IBANs, DNIs, phones before any LLM call — 100% PII recall, 0 false positives in tests
 - **Anomaly detection** on each user's historical spending — z-score (σ = 3.0) + subscription change detector — 1.2% flag rate on realistic data
 - **Monthly natural language insights** via `gpt-4o-mini` with deterministic template fallback — demo runs without cloud credentials
-- TFM prototype for **ClarityBank**, a Spanish fintech aggregator (340K users, 2.1M transactions/month)
+- Project prototype for **ClarityBank**, a Spanish fintech aggregator (340K users, 2.1M transactions/month)
 
 ## Project summary
 
-ClarityBank is a TFM (Master's Final Project) prototype for a Spanish open-banking aggregator. The system receives raw bank transaction descriptions and amounts, and automatically assigns each transaction to one of 12 fixed expense categories. Beyond classification, it detects spending anomalies against each user's historical profile and generates monthly financial summaries in natural language.
+ClarityBank is a Master's course project prototype for a Spanish open-banking aggregator. The system receives raw bank transaction descriptions and amounts, and automatically assigns each transaction to one of 12 fixed expense categories. Beyond classification, it detects spending anomalies against each user's historical profile and generates monthly financial summaries in natural language.
 
 The project is split in two: my classmate trained the ML classifier (LightGBM + multilingual sentence embeddings). I built the infrastructure: REST API, SQLite persistence, GDPR anonymisation pipeline, anomaly detection engine, insight generation with LLM fallback, and the Streamlit dashboard. The classifier interface is a single `load()` function — until the model was delivered, a keyword-based mock ran transparently in its place.
 
@@ -477,7 +477,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 
 **Alternative considered:** return HTTP 503 if LLM is unconfigured.
 
-**Rationale:** the TFM evaluation requires a working demo. A meaningful static insight is better than a 503 for evaluators without Azure access. When credentials are present, the real LLM path activates transparently — the response schema is identical.
+**Rationale:** the course evaluation requires a working demo. A meaningful static insight is better than a 503 for evaluators without Azure access. When credentials are present, the real LLM path activates transparently — the response schema is identical.
 
 [↑ Back to top](#table-of-contents)
 
@@ -504,7 +504,7 @@ Insights are generated as a monthly batch and are not subject to the per-transac
 - **Python 3.14 + Presidio** — `presidio-analyzer`/`spacy` had no wheels for 3.14 at development time. On 3.14 the anonymisation degrades to regex-only, which misses edge cases like names in full uppercase. For full NER coverage: Python 3.11 or 3.12 + `python -m spacy download es_core_news_md`.
 - **Simulated streaming** — the Streamlit "live feed" uses `st.rerun()` polling, not real-time push. In production this would be a Kafka consumer or webhook listener on the same `POST /transactions` endpoint.
 - **suscripciones/ocio boundary** — when the exact platform name is absent from the description (e.g. `PAGO PLATAFORMA STREAMING`), the classifier's precision on `suscripciones` drops to ~62% on robustness tests. More training examples for generic subscription descriptions is the documented fix.
-- **sklearn version mismatch** — `classifier.pkl` was trained on scikit-learn 1.6.1; `requirements.txt` pins >= 1.4. This triggers `InconsistentVersionWarning`. The model works correctly, but retraining on 1.8.x is recommended before final TFM submission.
+- **sklearn version mismatch** — `classifier.pkl` was trained on scikit-learn 1.6.1; `requirements.txt` pins >= 1.4. This triggers `InconsistentVersionWarning`. The model works correctly, but retraining on 1.8.x is recommended before final submission.
 - **Phase 6 incomplete** — end-to-end integration tests, API documentation export, and model card are pending.
 
 [↑ Back to top](#table-of-contents)
